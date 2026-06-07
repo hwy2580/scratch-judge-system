@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scratch 判题系统</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 20px; color: #2c3e50; }
+  h2 { margin-bottom: 12px; color: #34495e; font-size: 18px; }
+
+  .container { max-width: 900px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 16px; }
+
+  /* 可折叠区域 */
+  .collapsible-header { cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+  .collapsible-header::after { content: '▼'; font-size: 12px; transition: transform 0.2s; }
+  .collapsible-header.open::after { transform: rotate(180deg); }
+  .collapsible-body { display: none; margin-top: 16px; }
+  .collapsible-body.open { display: block; }
+
+  /* 表单 */
+  label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 14px; color: #555; }
+  input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 12px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
+  textarea { resize: vertical; min-height: 60px; font-family: monospace; }
+
+  /* 按钮 */
+  .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; transition: background 0.2s; }
+  .btn-primary { background: #3498db; color: #fff; }
+  .btn-primary:hover { background: #2980b9; }
+  .btn-success { background: #27ae60; color: #fff; }
+  .btn-success:hover { background: #219a52; }
+  .btn-danger { background: #e74c3c; color: #fff; }
+  .btn-danger:hover { background: #c0392b; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-group { display: flex; gap: 8px; margin-top: 8px; }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+  th { background: #f8f9fa; font-weight: 600; color: #555; }
+
+  /* 判题结果 */
+  .verdict { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: 700; font-size: 16px; }
+  .verdict-AC { background: #d4edda; color: #155724; }
+  .verdict-WA { background: #f8d7da; color: #721c24; }
+  .verdict-TLE { background: #fff3cd; color: #856404; }
+  .verdict-MLE { background: #fff3cd; color: #856404; }
+  .verdict-RE { background: #f8d7da; color: #721c24; }
+
+  .result-detail { margin-top: 12px; }
+  .case-row { padding: 8px; margin-bottom: 4px; border-radius: 4px; background: #f8f9fa; }
+  .case-row.fail { background: #fff5f5; }
+  .meta { color: #888; font-size: 12px; margin-top: 4px; }
+
+  /* 测试用例编辑器 */
+  .test-case-editor { border: 1px solid #eee; border-radius: 4px; padding: 10px; margin-bottom: 8px; position: relative; }
+  .test-case-editor .remove-tc { position: absolute; top: 6px; right: 6px; background: none; border: none; cursor: pointer; color: #e74c3c; font-size: 18px; }
+
+  /* 加载中 */
+  .loading { text-align: center; padding: 20px; color: #888; }
+
+  /* 文件上传区域 */
+  .file-upload { border: 2px dashed #ddd; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+  .file-upload:hover, .file-upload.dragover { border-color: #3498db; background: #f0f8ff; }
+  .file-upload input { display: none; }
+  .file-name { margin-top: 8px; font-size: 14px; color: #3498db; }
+
+  /* 隐藏 */
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Scratch 判题系统</h1>
+
+  <!-- 题目管理区 -->
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <h2>题目管理</h2>
+    </div>
+    <div class="collapsible-body">
+      <!-- 题目列表 -->
+      <div id="problem-list">
+        <div class="loading">加载中...</div>
+      </div>
+
+      <!-- 新建题目按钮 -->
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="showProblemForm()">新建题目</button>
+      </div>
+
+      <!-- 题目编辑表单 -->
+      <div id="problem-form" class="hidden" style="margin-top: 16px;">
+        <h2 id="form-title">新建题目</h2>
+        <label>题目 ID</label>
+        <input type="text" id="pf-id" placeholder="如: two-sum">
+        <label>题目名称</label>
+        <input type="text" id="pf-name" placeholder="如: 两数之和">
+        <label>题目描述</label>
+        <textarea id="pf-desc" placeholder="题目描述（可选）"></textarea>
+        <div style="display:flex; gap:12px;">
+          <div style="flex:1;">
+            <label>时间限制 (ms)</label>
+            <input type="number" id="pf-time" value="5000">
+          </div>
+          <div style="flex:1;">
+            <label>步数限制</label>
+            <input type="number" id="pf-steps" value="100000">
+          </div>
+        </div>
+
+        <label>测试用例</label>
+        <div id="test-cases-editor"></div>
+        <button class="btn btn-sm btn-primary" onclick="addTestCase()" style="margin-bottom:12px;">+ 添加用例</button>
+
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="saveProblem()">保存</button>
+          <button class="btn" onclick="hideProblemForm()" style="background:#eee;">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 判题区 -->
+  <div class="card">
+    <h2>提交判题</h2>
+    <label>选择题目</label>
+    <select id="judge-problem">
+      <option value="">-- 请选择题目 --</option>
+    </select>
+
+    <label>上传 sb3 文件</label>
+    <div class="file-upload" id="file-drop" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" accept=".sb3" onchange="onFileSelect(event)">
+      <div>点击或拖拽 sb3 文件到此处</div>
+      <div class="file-name" id="file-name"></div>
+    </div>
+
+    <div class="btn-group" style="margin-top:12px;">
+      <button class="btn btn-success" id="submit-btn" onclick="submitJudge()">提交判题</button>
+    </div>
+
+    <!-- 判题结果 -->
+    <div id="judge-result" class="hidden" style="margin-top: 16px;">
+      <h2>判题结果</h2>
+      <div id="result-summary"></div>
+      <div id="result-details" class="result-detail"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+// ========== 工具函数 ==========
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `请求失败: ${res.status}`);
+  return data;
+}
+
+function toggleCollapse(header) {
+  header.classList.toggle('open');
+  header.nextElementSibling.classList.toggle('open');
+}
+
+// ========== 题目管理 ==========
+
+let problems = [];
+let editingId = null;
+
+async function loadProblems() {
+  try {
+    problems = await api('GET', '/api/problems');
+    renderProblemList();
+    renderProblemSelect();
+  } catch (err) {
+    document.getElementById('problem-list').innerHTML = `<div style="color:red;">加载失败: ${err.message}</div>`;
+  }
+}
+
+function renderProblemList() {
+  const el = document.getElementById('problem-list');
+  if (problems.length === 0) {
+    el.innerHTML = '<div style="color:#888;">暂无题目</div>';
+    return;
+  }
+  let html = '<table><tr><th>ID</th><th>名称</th><th>用例数</th><th>操作</th></tr>';
+  for (const p of problems) {
+    html += `<tr>
+      <td>${esc(p.id)}</td>
+      <td>${esc(p.name)}</td>
+      <td>${p.testCases}</td>
+      <td>
+        <button class="btn btn-sm btn-primary" onclick="editProblem('${esc(p.id)}')">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteProblem('${esc(p.id)}')">删除</button>
+      </td>
+    </tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function renderProblemSelect() {
+  const sel = document.getElementById('judge-problem');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">-- 请选择题目 --</option>';
+  for (const p of problems) {
+    sel.innerHTML += `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.id)})</option>`;
+  }
+  sel.value = val;
+}
+
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ========== 题目表单 ==========
+
+function showProblemForm(problem) {
+  editingId = problem ? problem.id : null;
+  document.getElementById('form-title').textContent = problem ? '编辑题目' : '新建题目';
+  document.getElementById('pf-id').value = problem ? problem.id : '';
+  document.getElementById('pf-id').disabled = !!problem;
+  document.getElementById('pf-name').value = problem ? problem.name : '';
+  document.getElementById('pf-desc').value = problem ? (problem.description || '') : '';
+  document.getElementById('pf-time').value = problem ? (problem.timeLimit || 5000) : 5000;
+  document.getElementById('pf-steps').value = problem ? (problem.stepLimit || 100000) : 100000;
+
+  const editor = document.getElementById('test-cases-editor');
+  editor.innerHTML = '';
+  const cases = problem ? problem.testCases : [{ input: {}, output: {} }];
+  for (const tc of cases) {
+    addTestCase(tc);
+  }
+
+  document.getElementById('problem-form').classList.remove('hidden');
+}
+
+function hideProblemForm() {
+  document.getElementById('problem-form').classList.add('hidden');
+  editingId = null;
+}
+
+function addTestCase(tc) {
+  const editor = document.getElementById('test-cases-editor');
+  const idx = editor.children.length;
+  const div = document.createElement('div');
+  div.className = 'test-case-editor';
+  div.innerHTML = `
+    <button class="remove-tc" onclick="this.parentElement.remove()" title="删除">&times;</button>
+    <div style="display:flex; gap:12px;">
+      <div style="flex:1;">
+        <label>input (JSON)</label>
+        <textarea class="tc-input">${JSON.stringify(tc ? tc.input : {}, null, 2)}</textarea>
+      </div>
+      <div style="flex:1;">
+        <label>output (JSON)</label>
+        <textarea class="tc-output">${JSON.stringify(tc ? tc.output : {}, null, 2)}</textarea>
+      </div>
+    </div>
+  `;
+  editor.appendChild(div);
+}
+
+async function editProblem(id) {
+  try {
+    const problem = await api('GET', `/api/problems/${id}`);
+    // 确保题目管理区展开
+    const header = document.querySelector('.collapsible-header');
+    if (!header.classList.contains('open')) header.click();
+    showProblemForm(problem);
+  } catch (err) {
+    alert('加载题目失败: ' + err.message);
+  }
+}
+
+async function saveProblem() {
+  const id = document.getElementById('pf-id').value.trim();
+  const name = document.getElementById('pf-name').value.trim();
+  const desc = document.getElementById('pf-desc').value.trim();
+  const timeLimit = parseInt(document.getElementById('pf-time').value) || 5000;
+  const stepLimit = parseInt(document.getElementById('pf-steps').value) || 100000;
+
+  if (!id) return alert('请填写题目 ID');
+  if (!name) return alert('请填写题目名称');
+
+  // 收集测试用例
+  const tcEditors = document.querySelectorAll('.test-case-editor');
+  const testCases = [];
+  for (const editor of tcEditors) {
+    const inputStr = editor.querySelector('.tc-input').value.trim();
+    const outputStr = editor.querySelector('.tc-output').value.trim();
+    try {
+      const input = JSON.parse(inputStr || '{}');
+      const output = JSON.parse(outputStr || '{}');
+      testCases.push({ input, output });
+    } catch (e) {
+      return alert('测试用例 JSON 格式错误: ' + e.message);
+    }
+  }
+
+  if (testCases.length === 0) return alert('请添加至少一个测试用例');
+
+  const problem = { id, name, description: desc, timeLimit, stepLimit, testCases };
+
+  try {
+    if (editingId) {
+      await api('PUT', `/api/problems/${editingId}`, problem);
+      alert('题目更新成功');
+    } else {
+      await api('POST', '/api/problems', problem);
+      alert('题目创建成功');
+    }
+    hideProblemForm();
+    loadProblems();
+  } catch (err) {
+    alert('保存失败: ' + err.message);
+  }
+}
+
+async function deleteProblem(id) {
+  if (!confirm(`确定删除题目 "${id}" 吗？`)) return;
+  try {
+    await api('DELETE', `/api/problems/${id}`);
+    loadProblems();
+  } catch (err) {
+    alert('删除失败: ' + err.message);
+  }
+}
+
+// ========== 判题 ==========
+
+let selectedFile = null;
+
+function onFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) {
+    selectedFile = file;
+    document.getElementById('file-name').textContent = file.name;
+  }
+}
+
+// 拖拽上传
+const dropZone = document.getElementById('file-drop');
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.sb3')) {
+    selectedFile = file;
+    document.getElementById('file-name').textContent = file.name;
+  } else {
+    alert('请上传 .sb3 文件');
+  }
+});
+
+async function submitJudge() {
+  const problemId = document.getElementById('judge-problem').value;
+  if (!problemId) return alert('请选择题目');
+  if (!selectedFile) return alert('请上传 sb3 文件');
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '判题中...';
+  document.getElementById('judge-result').classList.add('hidden');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('problemId', problemId);
+
+    const res = await fetch(API + '/api/judge', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || '判题失败');
+
+    renderResult(data);
+  } catch (err) {
+    alert('判题错误: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交判题';
+  }
+}
+
+function renderResult(data) {
+  const summary = document.getElementById('result-summary');
+  const details = document.getElementById('result-details');
+
+  summary.innerHTML = `
+    <span class="verdict verdict-${data.verdict}">${data.verdict}</span>
+    <span class="meta" style="margin-left:12px;">总耗时: ${data.totalTime}ms | 总步数: ${data.totalSteps}</span>
+  `;
+
+  let html = '';
+  for (const d of data.details) {
+    const cls = d.verdict === 'AC' ? '' : 'fail';
+    html += `<div class="case-row ${cls}">
+      <div>
+        <strong>用例 ${d.case}</strong>
+        <span class="verdict verdict-${d.verdict}" style="margin-left:8px;font-size:12px;">${d.verdict}</span>
+        <span class="meta" style="margin-left:8px;">${d.time}ms | ${d.steps}步</span>
+      </div>
+      <div class="meta">
+        输入: ${JSON.stringify(d.input)}
+      </div>
+      <div class="meta">
+        期望: ${JSON.stringify(d.expected)}
+      </div>
+      <div class="meta">
+        实际: ${d.actual !== null ? JSON.stringify(d.actual) : '无'}
+      </div>
+      ${d.error ? `<div style="color:#e74c3c;font-size:12px;margin-top:4px;">${esc(d.error)}</div>` : ''}
+    </div>`;
+  }
+  details.innerHTML = html;
+
+  document.getElementById('judge-result').classList.remove('hidden');
+}
+
+// ========== 初始化 ==========
+
+loadProblems();
+</script>
+</body>
+</html>

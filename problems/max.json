@@ -1,0 +1,26 @@
+{
+  "id": "max",
+  "name": "数组中最大的数",
+  "description": "给定一个数组，请给出其中最大的数",
+  "timeLimit": 1000,
+  "stepLimit": 10000,
+  "testCases": [
+    {
+      "input": {
+        "list": [
+          6,
+          3,
+          4,
+          5,
+          2,
+          7,
+          5,
+          4
+        ]
+      },
+      "output": {
+        "ans": 7
+      }
+    }
+  ]
+}

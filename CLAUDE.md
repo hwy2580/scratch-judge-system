@@ -23,12 +23,15 @@ scratch-judge-system/
 ├── problems/              # 题目配置（每题一个 JSON）
 │   ├── example.json       # 标量示例：两数之和
 │   └── one-to-n.json      # 列表示例：输出1到n
+├── public/
+│   └── index.html         # 前端测试页面
 ├── src/
 │   ├── verdict.js         # 判定常量 AC/WA/TLE/MLE/RE
 │   ├── sb3Parser.js       # SB3 解压、变量查找/修改、重新打包
 │   ├── judge.js           # 核心判题器（VM 生命周期、执行监控）
 │   └── routes/
-│       └── judge.js       # Express 路由
+│       ├── judge.js       # 判题路由
+│       └── problems.js    # 题目管理 CRUD 路由
 └── test/
     └── test.judge.js      # 测试脚本
 ```
@@ -43,11 +46,26 @@ node test/test.judge.js <sb3路径> <题目ID>  # 指定文件测试
 
 ## API 接口
 
+### 判题接口
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/judge` | 判题（multipart/form-data: file + problemId） |
-| GET | `/api/judge/problems` | 获取题目列表 |
 | GET | `/api/health` | 健康检查 |
+
+### 题目管理接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/problems` | 获取所有题目列表 |
+| GET | `/api/problems/:id` | 获取单个题目详情（含测试用例） |
+| POST | `/api/problems` | 创建新题目（JSON body） |
+| PUT | `/api/problems/:id` | 更新题目（JSON body） |
+| DELETE | `/api/problems/:id` | 删除题目 |
+
+### 前端页面
+
+访问 `http://localhost:3000/` 打开前端测试页面，支持题目管理和判题提交。
 
 ## 题目配置格式
 
@@ -158,10 +176,25 @@ try {
 
 ## 添加新题目
 
-1. 在 `problems/` 目录下创建 JSON 文件
-2. 定义 `id`、`name`、`testCases`
-3. `input` 中的变量名/列表名必须与 sb3 程序中的名称完全一致（区分大小写）
-4. 重启服务器后自动生效
+### 方式一：通过 API
+
+```bash
+curl -X POST http://localhost:3000/api/problems \
+  -H "Content-Type: application/json" \
+  -d '{"id":"my-problem","name":"我的题目","testCases":[{"input":{"n":5},"output":{"ans":25}}]}'
+```
+
+### 方式二：通过前端页面
+
+访问 `http://localhost:3000/`，在题目管理区点击"新建题目"。
+
+### 方式三：手动创建文件
+
+在 `problems/` 目录下创建 JSON 文件，重启服务器后自动生效。
+
+### 注意事项
+
+- `input` 中的变量名/列表名必须与 sb3 程序中的名称完全一致（区分大小写）
 
 ## 开发约定
 

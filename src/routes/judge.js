@@ -8,6 +8,8 @@ const config = require('../../config/default');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+
+
 /**
  * POST /api/judge
  * 接收 sb3 文件和题目 ID，返回判题结果
@@ -57,36 +59,6 @@ router.post('/', upload.single('file'), async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('判题错误:', err);
-    res.status(500).json({ error: `服务器内部错误: ${err.message}` });
-  }
-});
-
-/**
- * GET /api/problems
- * 获取所有可用题目列表
- */
-router.get('/problems', (req, res) => {
-  try {
-    const problemsDir = path.resolve(config.problemsDir);
-    if (!fs.existsSync(problemsDir)) {
-      return res.json([]);
-    }
-
-    const files = fs.readdirSync(problemsDir).filter(f => f.endsWith('.json'));
-    const problems = files.map(f => {
-      const data = JSON.parse(fs.readFileSync(path.join(problemsDir, f), 'utf-8'));
-      return {
-        id: data.id,
-        name: data.name,
-        testCases: data.testCases.length,
-        timeLimit: data.timeLimit || config.defaultTimeLimit,
-        stepLimit: data.stepLimit || config.defaultStepLimit
-      };
-    });
-
-    res.json(problems);
-  } catch (err) {
-    console.error('获取题目列表错误:', err);
     res.status(500).json({ error: `服务器内部错误: ${err.message}` });
   }
 });
