@@ -1,0 +1,21 @@
+{
+  "id": "one-to-n",
+  "name": "输出1到n",
+  "description": "给定一个数 n，将 1 到 n 的所有整数依次存入列表 result 中",
+  "timeLimit": 5000,
+  "stepLimit": 200000,
+  "testCases": [
+    {
+      "input": { "n": 5 },
+      "output": { "result": ["1", "2", "3", "4", "5"] }
+    },
+    {
+      "input": { "n": 1 },
+      "output": { "result": ["1"] }
+    },
+    {
+      "input": { "n": 10 },
+      "output": { "result": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] }
+    }
+  ]
+}

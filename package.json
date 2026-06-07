@@ -1,0 +1,21 @@
+{
+  "name": "scratch-judge-system",
+  "version": "1.0.0",
+  "description": "Scratch 3.0 判题系统",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/test.judge.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "jszip": "^3.10.1",
+    "multer": "^2.1.1",
+    "scratch-storage": "^6.2.1",
+    "scratch-vm": "^5.0.300"
+  }
+}
