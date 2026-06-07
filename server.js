@@ -24,8 +24,12 @@ app.use('/api/problems/assets', express.static(path.join(__dirname, config.asset
 // 静态文件服务（前端页面）
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 启动服务器
-const port = config.port;
+// 启动服务器（优先级：--port 参数 > 环境变量 > 配置文件默认值）
+const args = process.argv.slice(2);
+const portArg = args.indexOf('--port');
+const port = portArg !== -1 && args[portArg + 1]
+  ? parseInt(args[portArg + 1], 10)
+  : config.port;
 app.listen(port, () => {
   console.log(`Scratch 判题系统已启动，端口: ${port}`);
   console.log(`前端页面: http://localhost:${port}/`);
