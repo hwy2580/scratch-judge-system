@@ -2,6 +2,10 @@
   "id": "one-to-n",
   "name": "输出1到n",
   "description": "给定一个数 n，将 1 到 n 的所有整数依次存入列表 result 中",
+  "category": "GESP-1",
+  "difficulty": "easy",
+  "source": "模拟题",
+  "tags": ["循环", "列表"],
   "timeLimit": 5000,
   "stepLimit": 200000,
   "testCases": [

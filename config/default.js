@@ -12,5 +12,13 @@ module.exports = {
   defaultMemoryLimit: 256,
 
   // 题目配置文件目录
-  problemsDir: 'problems'
+  problemsDir: 'problems',
+
+  // 题目资源（图片等）目录
+  assetsDir: 'problems/assets',
+
+  // 图片上传限制
+  maxImageSize: 5 * 1024 * 1024, // 5MB
+  maxImagesPerUpload: 10,
+  allowedImageTypes: ['image/png', 'image/jpeg', 'image/svg+xml', 'image/gif']
 };

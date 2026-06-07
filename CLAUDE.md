@@ -19,19 +19,24 @@ scratch-judge-system/
 ├── CLAUDE.md              # 本文件 - 项目上下文
 ├── server.js              # Express 服务器入口
 ├── config/
-│   └── default.js         # 全局配置（端口、默认限制）
+│   └── default.js         # 全局配置（端口、默认限制、上传限制）
+├── md/                    # 变更记录与计划
+│   ├── change/            # 变更记录（CHANGELOG-日期-简述.md）
+│   └── plan/              # 修改计划（PLAN-日期-简述.md）
 ├── problems/              # 题目配置（每题一个 JSON）
+│   ├── assets/            # 题目图片资源（按题目 ID 建子目录）
 │   ├── example.json       # 标量示例：两数之和
-│   └── one-to-n.json      # 列表示例：输出1到n
+│   ├── one-to-n.json      # 列表示例：输出1到n
+│   └── max.json           # 列表示例：数组中最大的数
 ├── public/
-│   └── index.html         # 前端测试页面
+│   └── index.html         # 前端测试页面（含 Markdown 渲染、筛选、图片上传）
 ├── src/
 │   ├── verdict.js         # 判定常量 AC/WA/TLE/MLE/RE
 │   ├── sb3Parser.js       # SB3 解压、变量查找/修改、重新打包
 │   ├── judge.js           # 核心判题器（VM 生命周期、执行监控）
 │   └── routes/
 │       ├── judge.js       # 判题路由
-│       └── problems.js    # 题目管理 CRUD 路由
+│       └── problems.js    # 题目管理 CRUD + 图片上传 + 筛选路由
 └── test/
     └── test.judge.js      # 测试脚本
 ```
@@ -57,15 +62,42 @@ node test/test.judge.js <sb3路径> <题目ID>  # 指定文件测试
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/problems` | 获取所有题目列表 |
+| GET | `/api/problems` | 获取题目列表，支持筛选参数 |
 | GET | `/api/problems/:id` | 获取单个题目详情（含测试用例） |
 | POST | `/api/problems` | 创建新题目（JSON body） |
 | PUT | `/api/problems/:id` | 更新题目（JSON body） |
-| DELETE | `/api/problems/:id` | 删除题目 |
+| DELETE | `/api/problems/:id` | 删除题目（同时删除图片资源） |
+
+### 题目图片资源接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/problems/:id/assets` | 上传图片（multipart/form-data，字段名 `images`） |
+| GET | `/api/problems/:id/assets` | 获取题目图片列表 |
+| DELETE | `/api/problems/:id/assets/:filename` | 删除指定图片 |
+| GET | `/api/problems/assets/:id/:filename` | 访问图片文件（静态服务） |
+
+### 筛选参数
+
+`GET /api/problems` 支持以下查询参数：
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `category` | 按分类精确匹配 | `?category=GESP-1` |
+| `difficulty` | 按难度精确匹配 | `?difficulty=easy` |
+| `source` | 按来源精确匹配 | `?source=真题` |
+| `tag` | 按标签模糊匹配 | `?tag=循环` |
+
+多个参数可组合使用：`?category=GESP-1&source=真题`
 
 ### 前端页面
 
-访问 `http://localhost:3000/` 打开前端测试页面，支持题目管理和判题提交。
+访问 `http://localhost:3000/` 打开前端测试页面，支持：
+- 题目管理（CRUD + 分类/标签）
+- 题面 Markdown 渲染（支持图片）
+- 题目筛选（按分类/难度/来源/标签）
+- 图片资源上传管理
+- 判题提交与结果展示
 
 ## 题目配置格式
 
@@ -73,6 +105,12 @@ node test/test.judge.js <sb3路径> <题目ID>  # 指定文件测试
 {
   "id": "problem-id",
   "name": "题目名称",
+  "description": "简短描述（列表展示用）",
+  "content": "# 题目标题\n\n完整题面，支持 **Markdown** 格式\n\n![图片](/api/problems/assets/problem-id/image.png)",
+  "category": "GESP-1",
+  "difficulty": "easy",
+  "source": "真题",
+  "tags": ["变量", "循环"],
   "timeLimit": 5000,
   "stepLimit": 100000,
   "testCases": [
@@ -84,9 +122,27 @@ node test/test.judge.js <sb3路径> <题目ID>  # 指定文件测试
 }
 ```
 
+### 字段说明
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `id` | ✅ | 唯一标识，只允许字母/数字/连字符/下划线 |
+| `name` | ✅ | 题目名称 |
+| `description` | ❌ | 简短描述（纯文本，列表展示用） |
+| `content` | ❌ | 完整题面（Markdown 格式，前端渲染，优先级高于 description） |
+| `category` | ❌ | 分类，如 `GESP-1`~`GESP-8`、`mock` |
+| `difficulty` | ❌ | 难度：`easy`、`medium`、`hard` |
+| `source` | ❌ | 来源：`真题`、`模拟题`、`自编` |
+| `tags` | ❌ | 标签数组，如 `["循环", "列表"]` |
+| `timeLimit` | ❌ | 时间限制（ms），覆盖全局默认值 |
+| `stepLimit` | ❌ | 步数限制，覆盖全局默认值 |
+| `testCases` | ✅ | 测试用例数组，非空 |
+
+### 测试用例规则
+
 - `input` 中值为数组时表示列表，值为标量时表示普通变量
 - `output` 同理，系统会根据期望值类型自动匹配变量或列表
-- `timeLimit`/`stepLimit` 可选，覆盖 `config/default.js` 中的全局默认值
+- `content` 中的图片路径格式：`/api/problems/assets/{题目ID}/{文件名}`
 
 ## 判定结果
 
@@ -201,3 +257,5 @@ curl -X POST http://localhost:3000/api/problems \
 - 所有文档、注释使用中文
 - 使用 CommonJS 模块系统（`require`/`module.exports`）
 - 判题器每个测试用例使用独立 VM 实例，确保隔离性
+- **变更记录**：每次修改完成后，写入 `md/change/CHANGELOG-{日期}-{简述}.md`，记录变更背景、内容、文件清单和验证结果
+- **修改计划**：执行修改前，将计划写入 `md/plan/PLAN-{日期}-{简述}.md`，方便用户查看和确认

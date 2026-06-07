@@ -2,6 +2,10 @@
   "id": "max",
   "name": "数组中最大的数",
   "description": "给定一个数组，请给出其中最大的数",
+  "category": "GESP-1",
+  "difficulty": "medium",
+  "source": "模拟题",
+  "tags": ["列表", "循环", "比较"],
   "timeLimit": 1000,
   "stepLimit": 10000,
   "testCases": [

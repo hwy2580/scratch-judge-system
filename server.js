@@ -18,6 +18,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+// 题目资源（图片等）静态服务
+app.use('/api/problems/assets', express.static(path.join(__dirname, config.assetsDir)));
+
 // 静态文件服务（前端页面）
 app.use(express.static(path.join(__dirname, 'public')));
 
