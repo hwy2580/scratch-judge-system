@@ -38,7 +38,10 @@ class Judge {
       // 1. 解析 sb3 并修改输入变量
       const { project, zip } = await SB3Parser.parse(sb3Buffer);
 
-      // 设置输入变量
+      // 替换输入变量的首次赋值字面量（解决学生手动赋值覆盖测试数据的问题）
+      SB3Parser.replaceFirstAssignments(project, testCase.input);
+
+      // 设置输入变量（写入 project.json 的 variables 字段）
       const notFound = SB3Parser.setInputs(project, testCase.input);
       if (notFound.length > 0) {
         return {

@@ -159,6 +159,104 @@ class SB3Parser {
   }
 
   /**
+   * 替换输入变量在执行顺序中的首次赋值字面量
+   * 解决学生手动赋值输入变量会覆盖判题器注入测试数据的问题。
+   * 只替换每个输入变量的第一次赋值中的字面量值，后续赋值保留不动。
+   *
+   * @param {object} project - project.json 对象
+   * @param {object} inputs - {变量名: 测试值} 映射
+   */
+  static replaceFirstAssignments(project, inputs) {
+    const inputNames = new Set(Object.keys(inputs));
+
+    for (const target of project.targets) {
+      const blocks = target.blocks;
+      if (!blocks) continue;
+      this._processBlockChains(blocks, inputNames, inputs);
+    }
+  }
+
+  /**
+   * 处理 target 中的所有积木链
+   * @private
+   */
+  static _processBlockChains(blocks, inputNames, inputs) {
+    // 1. 找到所有脚本链入口（topLevel 积木或 C-block 的 SUBSTACK/SUBSTACK2）
+    const scriptEntries = [];
+
+    for (const [blockId, block] of Object.entries(blocks)) {
+      if (Array.isArray(block)) continue; // 原始积木，跳过
+      if (block.topLevel) {
+        scriptEntries.push(blockId);
+      }
+    }
+
+    // 2. 递归处理每条链
+    for (const entryId of scriptEntries) {
+      this._walkChain(blocks, entryId, inputNames, inputs);
+    }
+  }
+
+  /**
+   * 沿积木链遍历，处理 data_setvariableto
+   * @private
+   */
+  static _walkChain(blocks, startId, inputNames, inputs) {
+    let currentId = startId;
+    while (currentId) {
+      const block = blocks[currentId];
+      if (!block || Array.isArray(block)) break;
+
+      // 处理 C-block 的 SUBSTACK/SUBSTACK2（如 repeat、if、forever）
+      for (const [key, input] of Object.entries(block.inputs || {})) {
+        if (key.startsWith('SUBSTACK') && Array.isArray(input)) {
+          // SUBSTACK 格式: [2, "childBlockId"] 或 [3, "childBlockId", "shadowId"]
+          const childId = typeof input[1] === 'string' ? input[1] : null;
+          if (childId) {
+            this._walkChain(blocks, childId, inputNames, inputs);
+          }
+        }
+      }
+
+      // 处理 data_setvariableto
+      if (block.opcode === 'data_setvariableto') {
+        const varField = block.fields && block.fields.VARIABLE;
+        if (varField && Array.isArray(varField) && inputNames.has(varField[0])) {
+          const varName = varField[0];
+          // 替换 VALUE 中的字面量
+          this._replaceLiteralInput(block, varName, inputs[varName]);
+          // 替换后从 inputNames 中移除，确保只处理第一次赋值
+          inputNames.delete(varName);
+          // 如果没有剩余输入变量需要处理，提前退出
+          if (inputNames.size === 0) return;
+        }
+      }
+
+      currentId = block.next;
+    }
+  }
+
+  /**
+   * 替换积木 VALUE 输入中的字面量值
+   * SB3 压缩格式中字面量: [1, [4, "3"]] 或 [1, [10, "hello"]]
+   * @private
+   */
+  static _replaceLiteralInput(block, varName, newValue) {
+    const valueInput = block.inputs && block.inputs.VALUE;
+    if (!valueInput || !Array.isArray(valueInput)) return;
+
+    // valueInput[1] 是内联字面量时为数组，格式: [类型常量, 值]
+    if (Array.isArray(valueInput[1])) {
+      const typeConst = valueInput[1][0];
+      // 4 = math_number, 5 = math_positive_number, 6 = math_whole_number,
+      // 7 = math_integer, 8 = math_angle, 10 = text
+      if ([4, 5, 6, 7, 8, 10].includes(typeConst)) {
+        valueInput[1][1] = String(newValue);
+      }
+    }
+  }
+
+  /**
    * 将修改后的 project.json 重新打包为 sb3 buffer
    * @param {object} project - 修改后的 project.json 对象
    * @param {JSZip} originalZip - 原始 zip 对象（保留资源文件）

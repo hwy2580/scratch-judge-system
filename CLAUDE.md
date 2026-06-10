@@ -154,6 +154,35 @@ node test/test.judge.js <sb3路径> <题目ID>  # 指定文件测试
 | MLE | 超内存 |
 | RE | 运行时错误 |
 
+## 输入变量处理
+
+Scratch 没有 `cin` 式输入机制，学生通过赋值积木手动设置输入变量（如 `设 n 为 5`）。这会覆盖判题器注入的测试数据。
+
+### 解决方案：替换首次赋值字面量
+
+对每个输入变量，按执行顺序找到其**第一次赋值**：
+- VALUE 是字面量（数字/文本常量）→ 替换为测试数据
+- VALUE 是表达式 → 跳过
+- 后续对该变量的所有赋值 → 不处理
+
+```
+学生代码：设 n 为 5, 设 ans 为 n * n, 设 n 为 0
+测试数据：n=10
+结果：n 首次赋值替换为 10 → ans=100 → n 被设为 0（保留）
+```
+
+### 实现位置
+
+- `src/sb3Parser.js`：`replaceFirstAssignments(project, inputs)` 函数
+- `src/judge.js`：在 `parse()` 后、`setInputs()` 前调用
+
+### SB3 积木结构关键点
+
+- `data_setvariableto`：设置变量值积木
+- `fields.VARIABLE[0]`：变量名
+- `inputs.VALUE[1]`：字面量时为 `[类型常量, 值]`，表达式时为 `"blockId"` 字符串
+- 积木通过 `next` 指针形成链表，C-block 通过 `inputs.SUBSTACK` 连接内部链
+
 ## scratch-vm 关键技术细节
 
 ### 导入方式
