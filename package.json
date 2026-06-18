@@ -1,13 +1,14 @@
 {
-  "name": "scratch-judge-system",
-  "version": "1.0.0",
-  "description": "Scratch 3.0 判题系统",
+  "name": "scratch-judge",
+  "version": "2.0.0",
+  "description": "Scratch 3.0 评测机 - 无状态判题服务",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/test.judge.js"
+    "test": "node test/test.judge.js",
+    "test:unit": "node test/test.replaceFirstAssignments.js"
   },
-  "keywords": [],
+  "keywords": ["scratch", "judge", "oj"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
