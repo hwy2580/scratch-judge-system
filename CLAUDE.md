@@ -1,8 +1,10 @@
-# Scratch 判题系统
+# Scratch 评测机
 
 ## 项目概述
 
-基于 scratch-vm 的 Scratch 3.0 程序自动判题系统，参考 GESP 编程竞赛的判题方式。接收 sb3 文件，修改输入变量，通过 scratch-vm 无头运行程序，检查输出变量是否符合预期结果。
+基于 scratch-vm 的 Scratch 3.0 程序**无状态评测机**。接收 sb3 文件和测试配置，通过 scratch-vm 无头运行程序，检查输出变量是否符合预期结果。
+
+本项目为纯判题服务，不管理题目数据。题目配置由调用方在请求中提供。
 
 ## 技术栈
 
@@ -19,130 +21,113 @@ scratch-judge-system/
 ├── CLAUDE.md              # 本文件 - 项目上下文
 ├── server.js              # Express 服务器入口
 ├── config/
-│   └── default.js         # 全局配置（端口、默认限制、上传限制）
+│   └── default.js         # 全局配置（端口、默认限制）
 ├── md/                    # 变更记录与计划
 │   ├── change/            # 变更记录（CHANGELOG-日期-简述.md）
 │   └── plan/              # 修改计划（PLAN-日期-简述.md）
-├── problems/              # 题目配置（每题一个 JSON）
-│   ├── assets/            # 题目图片资源（按题目 ID 建子目录）
-│   ├── example.json       # 标量示例：两数之和
-│   ├── one-to-n.json      # 列表示例：输出1到n
-│   └── max.json           # 列表示例：数组中最大的数
-├── public/
-│   └── index.html         # 前端测试页面（含 Markdown 渲染、筛选、图片上传）
 ├── src/
 │   ├── verdict.js         # 判定常量 AC/WA/TLE/MLE/RE
 │   ├── sb3Parser.js       # SB3 解压、变量查找/修改、重新打包
 │   ├── judge.js           # 核心判题器（VM 生命周期、执行监控）
 │   └── routes/
-│       ├── judge.js       # 判题路由
-│       └── problems.js    # 题目管理 CRUD + 图片上传 + 筛选路由
+│       └── judge.js       # 判题路由
 └── test/
-    └── test.judge.js      # 测试脚本
+    ├── test.judge.js      # 集成测试脚本
+    └── test.replaceFirstAssignments.js  # 单元测试脚本
 ```
 
 ## 常用命令
 
 ```bash
-npm start                  # 启动服务器（端口 3000）
+npm start                  # 启动服务器（默认端口 3001）
 npm test                   # 运行测试
+npm run test:unit          # 运行单元测试
 node test/test.judge.js <sb3路径> <题目ID>  # 指定文件测试
 ```
+
+启动端口可通过 `--port` 参数或 `PORT` 环境变量覆盖。
 
 ## API 接口
 
 ### 判题接口
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/judge` | 判题（multipart/form-data: file + problemId） |
-| GET | `/api/health` | 健康检查 |
+```
+POST /api/judge
+Content-Type: multipart/form-data
+```
 
-### 题目管理接口
+**请求参数：**
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/problems` | 获取题目列表，支持筛选参数 |
-| GET | `/api/problems/:id` | 获取单个题目详情（含测试用例） |
-| POST | `/api/problems` | 创建新题目（JSON body） |
-| PUT | `/api/problems/:id` | 更新题目（JSON body） |
-| DELETE | `/api/problems/:id` | 删除题目（同时删除图片资源） |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | File | 是 | sb3 文件 |
+| `config` | String | 是 | JSON 字符串，包含测试用例和限制参数 |
 
-### 题目图片资源接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/problems/:id/assets` | 上传图片（multipart/form-data，字段名 `images`） |
-| GET | `/api/problems/:id/assets` | 获取题目图片列表 |
-| DELETE | `/api/problems/:id/assets/:filename` | 删除指定图片 |
-| GET | `/api/problems/assets/:id/:filename` | 访问图片文件（静态服务） |
-
-### 筛选参数
-
-`GET /api/problems` 支持以下查询参数：
-
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `category` | 按分类精确匹配 | `?category=GESP-1` |
-| `difficulty` | 按难度精确匹配 | `?difficulty=easy` |
-| `source` | 按来源精确匹配 | `?source=真题` |
-| `tag` | 按标签模糊匹配 | `?tag=循环` |
-
-多个参数可组合使用：`?category=GESP-1&source=真题`
-
-### 前端页面
-
-访问 `http://localhost:3000/` 打开前端测试页面，支持：
-- 题目管理（CRUD + 分类/标签）
-- 题面 Markdown 渲染（支持图片）
-- 题目筛选（按分类/难度/来源/标签）
-- 图片资源上传管理
-- 判题提交与结果展示
-
-## 题目配置格式
+**config 字段结构：**
 
 ```json
 {
-  "id": "problem-id",
-  "name": "题目名称",
-  "description": "简短描述（列表展示用）",
-  "content": "# 题目标题\n\n完整题面，支持 **Markdown** 格式\n\n![图片](/api/problems/assets/problem-id/image.png)",
-  "category": "GESP-1",
-  "difficulty": "easy",
-  "source": "真题",
-  "tags": ["变量", "循环"],
-  "timeLimit": 5000,
-  "stepLimit": 100000,
   "testCases": [
     {
-      "input": { "变量名": "值" },
-      "output": { "变量名": "期望值" }
+      "input": { "变量名": "值", "列表名": ["项1", "项2"] },
+      "output": { "变量名": "期望值", "列表名": ["期望项1", "期望项2"] }
     }
-  ]
+  ],
+  "timeLimit": 5000,
+  "stepLimit": 100000
 }
 ```
 
-### 字段说明
+- `testCases`：必填，非空数组。`input` 和 `output` 必须为对象。
+- `timeLimit`：可选，单用例超时时间（ms），默认 10000。
+- `stepLimit`：可选，单用例最大执行步数，默认 500000。
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `id` | ✅ | 唯一标识，只允许字母/数字/连字符/下划线 |
-| `name` | ✅ | 题目名称 |
-| `description` | ❌ | 简短描述（纯文本，列表展示用） |
-| `content` | ❌ | 完整题面（Markdown 格式，前端渲染，优先级高于 description） |
-| `category` | ❌ | 分类，如 `GESP-1`~`GESP-8`、`mock` |
-| `difficulty` | ❌ | 难度：`easy`、`medium`、`hard` |
-| `source` | ❌ | 来源：`真题`、`模拟题`、`自编` |
-| `tags` | ❌ | 标签数组，如 `["循环", "列表"]` |
-| `timeLimit` | ❌ | 时间限制（ms），覆盖全局默认值 |
-| `stepLimit` | ❌ | 步数限制，覆盖全局默认值 |
-| `testCases` | ✅ | 测试用例数组，非空 |
+**响应：**
 
-### 测试用例规则
+```json
+{
+  "verdict": "AC",
+  "details": [
+    {
+      "case": 1,
+      "verdict": "AC",
+      "input": { "n": 5 },
+      "expected": { "ans": 25 },
+      "actual": { "ans": 25 },
+      "time": 12,
+      "steps": 1,
+      "error": null
+    }
+  ],
+  "totalTime": 12,
+  "totalSteps": 1
+}
+```
 
-- `input` 中值为数组时表示列表，值为标量时表示普通变量
-- `output` 同理，系统会根据期望值类型自动匹配变量或列表
-- `content` 中的图片路径格式：`/api/problems/assets/{题目ID}/{文件名}`
+**错误响应：**
+
+```json
+{ "error": "错误信息" }
+```
+
+### 健康检查
+
+```
+GET /api/health
+```
+
+响应：`{ "status": "ok", "version": "2.0.0", "uptime": 123 }`
+
+## 全局配置
+
+配置文件 `config/default.js`，可通过环境变量或启动参数覆盖：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `port` | 3001 | 服务器端口（`--port` 参数或 `PORT` 环境变量） |
+| `defaultTimeLimit` | 10000 | 默认超时时间（ms） |
+| `defaultStepLimit` | 500000 | 默认最大执行步数 |
+| `defaultMemoryLimit` | 256 | 默认最大内存（MB） |
 
 ## 判定结果
 
@@ -258,28 +243,6 @@ try {
 - scratch-vm@5.x 依赖 scratch-storage@4.x（嵌套在 node_modules/scratch-vm/node_modules/ 中）
 - 顶层安装的 scratch-storage@6.x 与 scratch-vm 内部版本不同，但 API 兼容
 - scratch-vm 的 `exports` 字段限制了子路径导入，不能 `require('scratch-vm/src/engine/variable')`
-
-## 添加新题目
-
-### 方式一：通过 API
-
-```bash
-curl -X POST http://localhost:3000/api/problems \
-  -H "Content-Type: application/json" \
-  -d '{"id":"my-problem","name":"我的题目","testCases":[{"input":{"n":5},"output":{"ans":25}}]}'
-```
-
-### 方式二：通过前端页面
-
-访问 `http://localhost:3000/`，在题目管理区点击"新建题目"。
-
-### 方式三：手动创建文件
-
-在 `problems/` 目录下创建 JSON 文件，重启服务器后自动生效。
-
-### 注意事项
-
-- `input` 中的变量名/列表名必须与 sb3 程序中的名称完全一致（区分大小写）
 
 ## 开发约定
 
