@@ -18,6 +18,28 @@
 
 ## 快速开始
 
+### 一键启动（推荐）
+
+```bash
+# Linux/macOS
+./start.sh
+
+# Windows
+start.bat
+```
+
+### 一键停止
+
+```bash
+# Linux/macOS
+./stop.sh
+
+# Windows
+stop.bat
+```
+
+### 手动启动
+
 ```bash
 # 安装依赖
 cd scratch-judge-server && npm install
