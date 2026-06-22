@@ -1,25 +1,25 @@
 @echo off
-REM 启动评测机和主服务
+REM Start judge server and main service
 
-echo 🚀 启动 Scratch 判题系统...
+echo Starting Scratch Judge System...
 
-REM 启动评测机（后台运行）
-echo   启动评测机 (端口 3001)...
+REM Start judge server (port 3001)
+echo Starting judge server (port 3001)...
 cd /d "%~dp0scratch-judge-server"
-start "评测机" cmd /c "npm start"
+start "Scratch Judge" cmd /c "node server.js"
 
-REM 等待评测机启动
-timeout /t 2 /nobreak >nul
+REM Wait for judge server to start
+timeout /t 3 /nobreak >nul
 
-REM 启动主服务（后台运行）
-echo   启动主服务 (端口 3000)...
+REM Start main service (port 3000)
+echo Starting main service (port 3000)...
 cd /d "%~dp0scratch-oj-server"
-start "主服务" cmd /c "npm start"
+start "Scratch OJ" cmd /c "node server.js"
 
 echo.
-echo ✅ 启动完成！
-echo    评测机: http://localhost:3001
-echo    主服务: http://localhost:3000
+echo Done!
+echo Judge server: http://localhost:3001
+echo Main service: http://localhost:3000
 echo.
-echo 使用 stop.bat 停止服务
+echo Use stop.bat to stop services
 pause
