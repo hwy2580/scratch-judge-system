@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scratch 判题系统</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 30px; color: #2c3e50; }
+
+    /* 卡片 */
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; overflow: hidden; }
+    .card-header { padding: 12px 20px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+    .card-header h2 { font-size: 16px; color: #495057; }
+    .card-header .toggle { font-size: 12px; color: #6c757d; }
+    .card-body { padding: 20px; }
+    .card-body.collapsed { display: none; }
+
+    /* 表单 */
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; font-family: inherit; }
+    .form-group textarea { min-height: 60px; resize: vertical; }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+    .form-hint { font-size: 12px; color: #6c757d; margin-top: 2px; }
+
+    /* 标签输入 */
+    .tags-input { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; border: 1px solid #ced4da; border-radius: 4px; min-height: 36px; align-items: center; background: #fff; }
+    .tags-input .tag { background: #e9ecef; border-radius: 3px; padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .tags-input .tag .remove { cursor: pointer; color: #6c757d; font-weight: bold; }
+    .tags-input .tag .remove:hover { color: #dc3545; }
+    .tags-input input { border: none; outline: none; flex: 1; min-width: 80px; font-size: 13px; padding: 2px 0; }
+
+    /* 按钮 */
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; transition: background 0.2s; }
+    .btn-primary { background: #007bff; color: #fff; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-success { background: #28a745; color: #fff; }
+    .btn-success:hover { background: #1e7e34; }
+    .btn-danger { background: #dc3545; color: #fff; }
+    .btn-danger:hover { background: #bd2130; }
+    .btn-secondary { background: #6c757d; color: #fff; }
+    .btn-secondary:hover { background: #545b62; }
+    .btn-outline { background: transparent; border: 1px solid #ced4da; color: #495057; }
+    .btn-outline:hover { background: #f8f9fa; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-group { display: flex; gap: 8px; margin-top: 16px; }
+
+    /* 表格 */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #dee2e6; font-size: 14px; }
+    th { background: #f8f9fa; font-weight: 600; color: #495057; }
+    tr:hover { background: #f1f3f5; }
+    td .btn { margin-right: 4px; }
+
+    /* 标签 */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+    .badge-info { background: #d1ecf1; color: #0c5460; }
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-warning { background: #fff3cd; color: #856404; }
+    .badge-danger { background: #f8d7da; color: #721c24; }
+    .badge-secondary { background: #e9ecef; color: #495057; }
+
+    /* 筛选栏 */
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; }
+    .filter-bar select { min-width: 100px; }
+    .filter-bar input { min-width: 140px; }
+
+    /* 文件上传 */
+    .upload-area { border: 2px dashed #ced4da; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .upload-area:hover, .upload-area.dragover { border-color: #007bff; background: #f0f7ff; }
+    .upload-area p { color: #6c757d; margin-bottom: 8px; }
+    .upload-area .filename { color: #28a745; font-weight: 600; }
+
+    /* 结果 */
+    .verdict { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+    .verdict-AC { color: #28a745; }
+    .verdict-WA { color: #dc3545; }
+    .verdict-TLE { color: #fd7e14; }
+    .verdict-MLE { color: #fd7e14; }
+    .verdict-RE { color: #dc3545; }
+    .result-section { margin-top: 12px; }
+    .result-section h3 { font-size: 14px; margin-bottom: 8px; color: #495057; }
+    .case-result { background: #f8f9fa; border-radius: 4px; padding: 12px; margin-bottom: 8px; font-size: 13px; }
+    .case-result.fail { border-left: 3px solid #dc3545; }
+    .case-result.pass { border-left: 3px solid #28a745; }
+    .case-result pre { background: #fff; padding: 8px; border-radius: 3px; margin-top: 6px; overflow-x: auto; font-size: 12px; }
+
+    /* Markdown 题面 */
+    .problem-content { padding: 16px; background: #fff; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 16px; line-height: 1.8; }
+    .problem-content h1, .problem-content h2, .problem-content h3 { margin: 16px 0 8px; color: #2c3e50; }
+    .problem-content h1 { font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+    .problem-content h2 { font-size: 17px; }
+    .problem-content h3 { font-size: 15px; }
+    .problem-content p { margin-bottom: 10px; }
+    .problem-content img { max-width: 100%; border-radius: 4px; margin: 8px 0; }
+    .problem-content code { background: #f1f3f5; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+    .problem-content pre { background: #282c34; color: #abb2bf; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+    .problem-content pre code { background: none; color: inherit; padding: 0; }
+    .problem-content ul, .problem-content ol { padding-left: 24px; margin-bottom: 10px; }
+    .problem-content blockquote { border-left: 3px solid #ced4da; padding-left: 12px; color: #6c757d; margin: 10px 0; }
+
+    /* 图片上传区 */
+    .assets-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .asset-item { position: relative; width: 120px; }
+    .asset-item img { width: 120px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #dee2e6; }
+    .asset-item .asset-name { font-size: 11px; color: #6c757d; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .asset-item .asset-delete { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; background: #dc3545; color: #fff; border: none; border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 20px; text-align: center; }
+
+    .loading { text-align: center; color: #6c757d; padding: 20px; }
+    .error-msg { color: #dc3545; font-size: 13px; margin-top: 4px; }
+    .success-msg { color: #28a745; font-size: 13px; margin-top: 4px; }
+    .hidden { display: none; }
+
+    /* 图片预览模态框 */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      max-width: 90%;
+      max-height: 90%;
+      position: relative;
+    }
+    .modal-content img {
+      max-width: 100%;
+      max-height: 80vh;
+      border-radius: 8px;
+    }
+    .modal-close {
+      position: absolute;
+      top: -30px;
+      right: 0;
+      color: white;
+      font-size: 28px;
+      cursor: pointer;
+    }
+    .modal-close:hover {
+      color: #ddd;
+    }
+
+    /* 资产操作按钮 */
+    .asset-actions {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      margin-top: 4px;
+    }
+    .asset-actions button {
+      padding: 2px 6px;
+      font-size: 10px;
+      border: 1px solid #dee2e6;
+      border-radius: 3px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .asset-actions button:hover {
+      background: #f8f9fa;
+    }
+
+    /* 上传进度条 */
+    .progress-bar {
+      height: 8px;
+      background: #e9ecef;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #007bff;
+      transition: width 0.3s;
+    }
+    .progress-text {
+      font-size: 12px;
+      color: #6c757d;
+      margin-top: 4px;
+    }
+
+    /* Toast 提示 */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      z-index: 2000;
+      animation: fadeInOut 2s ease;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* 禁用状态的上传区域 */
+    .upload-area.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Scratch 判题系统</h1>
+
+    <!-- ==================== 题目管理区 ==================== -->
+    <div class="card">
+      <div class="card-header" onclick="toggleSection('manage')">
+        <h2>📚 题目管理</h2>
+        <span class="toggle" id="manage-toggle">▼ 展开</span>
+      </div>
+      <div class="card-body collapsed" id="manage-body">
+
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+          <select id="filter-category">
+            <option value="">全部分类</option>
+          </select>
+          <select id="filter-difficulty">
+            <option value="">全部难度</option>
+            <option value="easy">简单</option>
+            <option value="medium">中等</option>
+            <option value="hard">困难</option>
+          </select>
+          <select id="filter-source">
+            <option value="">全部来源</option>
+            <option value="真题">真题</option>
+            <option value="模拟题">模拟题</option>
+            <option value="自编">自编</option>
+          </select>
+          <input type="text" id="filter-tag" placeholder="搜索标签...">
+          <button class="btn btn-outline btn-sm" onclick="loadProblems()">筛选</button>
+          <button class="btn btn-outline btn-sm" onclick="clearFilters()">清除</button>
+        </div>
+
+        <button class="btn btn-primary" onclick="showCreateForm()" style="margin-bottom: 12px;">新建题目</button>
+
+        <!-- 题目列表 -->
+        <table id="problems-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>名称</th>
+              <th>分类</th>
+              <th>难度</th>
+              <th>来源</th>
+              <th>用例</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="problems-tbody">
+            <tr><td colspan="7" class="loading">加载中...</td></tr>
+          </tbody>
+        </table>
+
+        <!-- 编辑/新建表单 -->
+        <div id="edit-form" class="hidden" style="margin-top: 16px; border-top: 1px solid #dee2e6; padding-top: 16px;">
+          <h3 id="form-title" style="font-size: 15px; margin-bottom: 12px;">新建题目</h3>
+          <div class="form-group">
+            <label>题目 ID</label>
+            <input type="text" id="f-id" placeholder="只允许字母、数字、连字符、下划线">
+            <div class="form-hint">创建后不可修改，同时作为文件名</div>
+          </div>
+          <div class="form-group">
+            <label>题目名称</label>
+            <input type="text" id="f-name" placeholder="如：两数之和">
+          </div>
+          <div class="form-group">
+            <label>简短描述</label>
+            <input type="text" id="f-description" placeholder="一句话描述（列表展示用）">
+          </div>
+          <div class="form-group">
+            <label>完整题面（Markdown）</label>
+            <textarea id="f-content" rows="8" placeholder="# 题目标题&#10;&#10;题目正文，支持 Markdown 语法&#10;&#10;![图片描述](/api/assets/题目ID/图片名.png)&#10;&#10;## 输入说明&#10;&#10;..."></textarea>
+            <div class="form-hint">支持 Markdown 格式，可插入图片。留空则使用简短描述</div>
+          </div>
+
+          <!-- 新增分类字段 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>分类</label>
+              <select id="f-category">
+                <option value="">无分类</option>
+                <option value="GESP-1">GESP-1</option>
+                <option value="GESP-2">GESP-2</option>
+                <option value="GESP-3">GESP-3</option>
+                <option value="GESP-4">GESP-4</option>
+                <option value="GESP-5">GESP-5</option>
+                <option value="GESP-6">GESP-6</option>
+                <option value="GESP-7">GESP-7</option>
+                <option value="GESP-8">GESP-8</option>
+                <option value="mock">模拟题</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>难度</label>
+              <select id="f-difficulty">
+                <option value="">未设置</option>
+                <option value="easy">简单</option>
+                <option value="medium">中等</option>
+                <option value="hard">困难</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>来源</label>
+              <select id="f-source">
+                <option value="">未设置</option>
+                <option value="真题">真题</option>
+                <option value="模拟题">模拟题</option>
+                <option value="自编">自编</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>标签</label>
+            <div class="tags-input" id="tags-container">
+              <input type="text" id="tags-input" placeholder="输入标签后按 Enter 添加">
+            </div>
+            <div class="form-hint">按 Enter 添加标签，点击 × 删除</div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>时间限制 (ms)</label>
+              <input type="number" id="f-timeLimit" value="5000">
+            </div>
+            <div class="form-group">
+              <label>步数限制</label>
+              <input type="number" id="f-stepLimit" value="100000">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>测试用例</label>
+            <div id="test-cases-editor"></div>
+            <button class="btn btn-outline btn-sm" onclick="addTestCase()" style="margin-top: 8px;">+ 添加用例</button>
+          </div>
+
+          <!-- 图片资源管理 -->
+          <div class="form-group" id="assets-section">
+            <label>图片资源</label>
+            <div class="upload-area" id="assets-upload-area" onclick="document.getElementById('assets-file-input').click()">
+              <p>点击或拖拽上传图片（PNG、JPG、SVG、GIF，最大 5MB）</p>
+              <input type="file" id="assets-file-input" class="hidden" multiple accept="image/png,image/jpeg,image/svg+xml,image/gif" onchange="uploadAssets()">
+            </div>
+            <div class="assets-list" id="assets-list"></div>
+            <!-- 上传进度条 -->
+            <div id="upload-progress" class="hidden">
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: 0%"></div>
+              </div>
+              <div class="progress-text">上传中... 0%</div>
+            </div>
+            <!-- URL 导入区域 -->
+            <div class="url-import-section" style="margin-top: 10px;">
+              <div class="form-row">
+                <div class="form-group" style="flex: 3;">
+                  <input type="text" id="image-url-input" placeholder="输入图片 URL，如 https://example.com/image.png">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                  <button class="btn btn-primary btn-sm" onclick="importFromUrl()">从 URL 导入</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="edit-msg"></div>
+          <div class="btn-group">
+            <button class="btn btn-success" onclick="saveProblem()">保存</button>
+            <button class="btn btn-secondary" onclick="hideEditForm()">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 判题区 ==================== -->
+    <div class="card">
+      <div class="card-header" onclick="toggleSection('judge')">
+        <h2>🧪 判题测试</h2>
+        <span class="toggle" id="judge-toggle">▲ 收起</span>
+      </div>
+      <div class="card-body" id="judge-body">
+        <div class="form-group">
+          <label>选择题目</label>
+          <select id="judge-problem" onchange="onJudgeProblemChange()">
+            <option value="">-- 请选择 --</option>
+          </select>
+        </div>
+
+        <!-- 题面展示 -->
+        <div id="judge-problem-desc" class="hidden" style="margin-bottom: 16px;"></div>
+
+        <div class="form-group">
+          <label>上传 SB3 文件</label>
+          <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+            <p>点击选择或拖拽 .sb3 文件到此处</p>
+            <input type="file" id="file-input" class="hidden" accept=".sb3" onchange="updateFilename()">
+            <div class="filename" id="filename-display"></div>
+          </div>
+        </div>
+
+        <button class="btn btn-success" id="submit-btn" onclick="submitJudge()" disabled>提交判题</button>
+
+        <div id="judge-result" style="margin-top: 20px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片预览模态框 -->
+  <div id="image-preview-modal" class="modal hidden" onclick="closePreview()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <span class="modal-close" onclick="closePreview()">&times;</span>
+      <img id="preview-image" src="" alt="">
+      <div id="preview-info" style="color:white;text-align:center;margin-top:10px;font-size:14px;"></div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 工具函数 ====================
+    const api = async (method, path, body) => {
+      const opts = { method, headers: {} };
+      if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch('/api' + path, opts);
+      return res.json();
+    };
+
+    const esc = s => {
+      if (s === undefined || s === null) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    };
+
+    const renderMarkdown = (text) => {
+      if (!text) return '';
+      return DOMPurify.sanitize(marked.parse(text));
+    };
+
+    const difficultyLabel = { easy: '简单', medium: '中等', hard: '困难' };
+    const difficultyBadge = { easy: 'badge-success', medium: 'badge-warning', hard: 'badge-danger' };
+
+    // ==================== 标签管理 ====================
+    let currentTags = [];
+
+    const renderTags = () => {
+      const container = document.getElementById('tags-container');
+      const input = document.getElementById('tags-input');
+      container.innerHTML = '';
+      currentTags.forEach((tag, i) => {
+        const el = document.createElement('span');
+        el.className = 'tag';
+        el.innerHTML = `${esc(tag)} <span class="remove" onclick="removeTag(${i})">×</span>`;
+        container.appendChild(el);
+      });
+      container.appendChild(input);
+    };
+
+    const removeTag = (i) => {
+      currentTags.splice(i, 1);
+      renderTags();
+    };
+
+    document.getElementById('tags-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const val = e.target.value.trim();
+        if (val && !currentTags.includes(val)) {
+          currentTags.push(val);
+          renderTags();
+        }
+        e.target.value = '';
+      }
+    });
+
+    // ==================== 页面区域切换 ====================
+    const toggleSection = (name) => {
+      const body = document.getElementById(name + '-body');
+      const toggle = document.getElementById(name + '-toggle');
+      if (body.classList.contains('collapsed')) {
+        body.classList.remove('collapsed');
+        toggle.textContent = '▲ 收起';
+      } else {
+        body.classList.add('collapsed');
+        toggle.textContent = '▼ 展开';
+      }
+    };
+
+    // ==================== 题目列表 ====================
+    let allProblems = [];
+
+    const loadProblems = async () => {
+      try {
+        const params = new URLSearchParams();
+        const category = document.getElementById('filter-category').value;
+        const difficulty = document.getElementById('filter-difficulty').value;
+        const source = document.getElementById('filter-source').value;
+        const tag = document.getElementById('filter-tag').value;
+        if (category) params.set('category', category);
+        if (difficulty) params.set('difficulty', difficulty);
+        if (source) params.set('source', source);
+        if (tag) params.set('tag', tag);
+
+        const qs = params.toString();
+        allProblems = await api('GET', '/problems' + (qs ? '?' + qs : ''));
+        renderProblems();
+        updateCategoryFilter();
+        updateJudgeSelect();
+      } catch (e) {
+        document.getElementById('problems-tbody').innerHTML =
+          `<tr><td colspan="7" class="error-msg">加载失败: ${esc(e.message)}</td></tr>`;
+      }
+    };
+
+    const renderProblems = () => {
+      const tbody = document.getElementById('problems-tbody');
+      if (allProblems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#6c757d;">暂无题目</td></tr>';
+        return;
+      }
+      tbody.innerHTML = allProblems.map(p => `
+        <tr>
+          <td><code>${esc(p.id)}</code></td>
+          <td>${esc(p.name)}</td>
+          <td>${p.category ? `<span class="badge badge-info">${esc(p.category)}</span>` : '-'}</td>
+          <td>${p.difficulty ? `<span class="badge ${difficultyBadge[p.difficulty] || 'badge-secondary'}">${esc(difficultyLabel[p.difficulty] || p.difficulty)}</span>` : '-'}</td>
+          <td>${p.source ? `<span class="badge badge-secondary">${esc(p.source)}</span>` : '-'}</td>
+          <td>${p.testCasesCount}</td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="editProblem('${esc(p.id)}')">编辑</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProblem('${esc(p.id)}')">删除</button>
+          </td>
+        </tr>
+      `).join('');
+    };
+
+    const updateCategoryFilter = () => {
+      const select = document.getElementById('filter-category');
+      const categories = [...new Set(allProblems.map(p => p.category).filter(Boolean))].sort();
+      const current = select.value;
+      select.innerHTML = '<option value="">全部分类</option>' +
+        categories.map(c => `<option value="${esc(c)}" ${c === current ? 'selected' : ''}>${esc(c)}</option>`).join('');
+    };
+
+    const clearFilters = () => {
+      document.getElementById('filter-category').value = '';
+      document.getElementById('filter-difficulty').value = '';
+      document.getElementById('filter-source').value = '';
+      document.getElementById('filter-tag').value = '';
+      loadProblems();
+    };
+
+    // ==================== 题目编辑 ====================
+    let editingId = null;
+    let testCases = [];
+
+    const showCreateForm = () => {
+      editingId = null;
+      document.getElementById('form-title').textContent = '新建题目';
+      document.getElementById('f-id').value = '';
+      document.getElementById('f-id').disabled = false;
+      document.getElementById('f-name').value = '';
+      document.getElementById('f-description').value = '';
+      document.getElementById('f-content').value = '';
+      document.getElementById('f-category').value = '';
+      document.getElementById('f-difficulty').value = '';
+      document.getElementById('f-source').value = '';
+      currentTags = [];
+      renderTags();
+      document.getElementById('f-timeLimit').value = 5000;
+      document.getElementById('f-stepLimit').value = 100000;
+      testCases = [{ input: '{}', output: '{}' }];
+      renderTestCases();
+      document.getElementById('edit-msg').innerHTML = '';
+      document.getElementById('edit-form').classList.remove('hidden');
+
+      // 显示图片上传区域，但设为禁用状态
+      document.getElementById('assets-section').classList.remove('hidden');
+      const uploadArea = document.getElementById('assets-upload-area');
+      uploadArea.classList.add('disabled');
+      uploadArea.querySelector('p').textContent = '请先保存题目，然后上传图片';
+
+      // 清空图片列表
+      document.getElementById('assets-list').innerHTML = '';
+
+      // 隐藏 URL 导入区域
+      const urlSection = document.querySelector('.url-import-section');
+      if (urlSection) urlSection.style.display = 'none';
+    };
+
+    const editProblem = async (id) => {
+      try {
+        const p = await api('GET', '/problems/' + id);
+        editingId = id;
+        document.getElementById('form-title').textContent = '编辑题目: ' + id;
+        document.getElementById('f-id').value = p.id;
+        document.getElementById('f-id').disabled = true;
+        document.getElementById('f-name').value = p.name;
+        document.getElementById('f-description').value = p.description || '';
+        document.getElementById('f-content').value = p.content || '';
+        document.getElementById('f-category').value = p.category || '';
+        document.getElementById('f-difficulty').value = p.difficulty || '';
+        document.getElementById('f-source').value = p.source || '';
+        currentTags = [...(p.tags || [])];
+        renderTags();
+        document.getElementById('f-timeLimit').value = p.timeLimit || 5000;
+        document.getElementById('f-stepLimit').value = p.stepLimit || 100000;
+        testCases = p.testCases.map(tc => ({
+          input: JSON.stringify(tc.input, null, 2),
+          output: JSON.stringify(tc.output, null, 2)
+        }));
+        renderTestCases();
+        document.getElementById('edit-msg').innerHTML = '';
+        document.getElementById('edit-form').classList.remove('hidden');
+        document.getElementById('assets-section').classList.remove('hidden');
+
+        // 确保上传区域可用
+        const uploadArea = document.getElementById('assets-upload-area');
+        uploadArea.classList.remove('disabled');
+        uploadArea.querySelector('p').textContent = '点击或拖拽上传图片（PNG、JPG、SVG、GIF，最大 5MB）';
+
+        // 显示 URL 导入区域
+        const urlSection = document.querySelector('.url-import-section');
+        if (urlSection) urlSection.style.display = 'block';
+
+        loadAssets(id);
+      } catch (e) {
+        alert('加载题目失败: ' + e.message);
+      }
+    };
+
+    const hideEditForm = () => {
+      document.getElementById('edit-form').classList.add('hidden');
+      editingId = null;
+    };
+
+    const renderTestCases = () => {
+      const editor = document.getElementById('test-cases-editor');
+      editor.innerHTML = testCases.map((tc, i) => `
+        <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 10px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <strong>用例 ${i + 1}</strong>
+            <button class="btn btn-danger btn-sm" onclick="removeTestCase(${i})">删除</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>输入 (JSON)</label>
+              <textarea rows="3" onchange="testCases[${i}].input=this.value">${esc(tc.input)}</textarea>
+            </div>
+            <div class="form-group">
+              <label>期望输出 (JSON)</label>
+              <textarea rows="3" onchange="testCases[${i}].output=this.value">${esc(tc.output)}</textarea>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    };
+
+    const addTestCase = () => {
+      testCases.push({ input: '{}', output: '{}' });
+      renderTestCases();
+    };
+
+    const removeTestCase = (i) => {
+      testCases.splice(i, 1);
+      renderTestCases();
+    };
+
+    const saveProblem = async () => {
+      const msg = document.getElementById('edit-msg');
+      try {
+        const parsedCases = testCases.map((tc, i) => {
+          try {
+            return { input: JSON.parse(tc.input), output: JSON.parse(tc.output) };
+          } catch (e) {
+            throw new Error(`用例 ${i + 1} 的 JSON 格式错误: ${e.message}`);
+          }
+        });
+
+        const problem = {
+          id: document.getElementById('f-id').value.trim(),
+          name: document.getElementById('f-name').value.trim(),
+          description: document.getElementById('f-description').value.trim(),
+          content: document.getElementById('f-content').value.trim(),
+          category: document.getElementById('f-category').value,
+          difficulty: document.getElementById('f-difficulty').value,
+          source: document.getElementById('f-source').value,
+          tags: currentTags,
+          timeLimit: parseInt(document.getElementById('f-timeLimit').value) || 5000,
+          stepLimit: parseInt(document.getElementById('f-stepLimit').value) || 100000,
+          testCases: parsedCases
+        };
+
+        if (!problem.id || !problem.name) {
+          msg.innerHTML = '<div class="error-msg">ID 和名称不能为空</div>';
+          return;
+        }
+
+        let result;
+        if (editingId) {
+          result = await api('PUT', '/problems/' + editingId, problem);
+        } else {
+          result = await api('POST', '/problems', problem);
+        }
+
+        if (result.error) {
+          msg.innerHTML = `<div class="error-msg">${esc(result.error)}</div>`;
+        } else {
+          msg.innerHTML = `<div class="success-msg">✓ ${esc(result.message)}，现在可以上传图片了</div>`;
+          loadProblems();
+          if (!editingId) {
+            editingId = problem.id;
+            document.getElementById('f-id').disabled = true;
+
+            // 启用图片上传区域
+            const uploadArea = document.getElementById('assets-upload-area');
+            uploadArea.classList.remove('disabled');
+            uploadArea.querySelector('p').textContent = '点击或拖拽上传图片（PNG、JPG、SVG、GIF，最大 5MB）';
+
+            // 显示 URL 导入区域
+            const urlSection = document.querySelector('.url-import-section');
+            if (urlSection) urlSection.style.display = 'block';
+          }
+        }
+      } catch (e) {
+        msg.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+      }
+    };
+
+    const deleteProblem = async (id) => {
+      if (!confirm(`确认删除题目 "${id}"？此操作不可恢复。`)) return;
+      try {
+        const result = await api('DELETE', '/problems/' + id);
+        if (result.error) {
+          alert(result.error);
+        } else {
+          loadProblems();
+        }
+      } catch (e) {
+        alert('删除失败: ' + e.message);
+      }
+    };
+
+    // ==================== 图片管理工具函数 ====================
+
+    // 预览大图
+    const previewImage = (url, name) => {
+      const modal = document.getElementById('image-preview-modal');
+      const img = document.getElementById('preview-image');
+      const info = document.getElementById('preview-info');
+
+      img.src = url;
+      img.alt = name;
+      info.textContent = name;
+      modal.classList.remove('hidden');
+    };
+
+    // 关闭预览
+    const closePreview = () => {
+      document.getElementById('image-preview-modal').classList.add('hidden');
+    };
+
+    // ESC 关闭预览
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePreview();
+    });
+
+    // 复制 URL
+    const copyImageUrl = async (url) => {
+      const fullUrl = window.location.origin + url;
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+        showToast('URL 已复制到剪贴板');
+      } catch (e) {
+        // fallback
+        const input = document.createElement('input');
+        input.value = fullUrl;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('URL 已复制到剪贴板');
+      }
+    };
+
+    // 插入到 Markdown 编辑器
+    const insertImageToMarkdown = (url, name) => {
+      const editor = document.getElementById('f-content');
+      const markdown = `![${name}](${url})`;
+
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const text = editor.value;
+
+      editor.value = text.substring(0, start) + markdown + text.substring(end);
+      editor.focus();
+      editor.selectionStart = editor.selectionEnd = start + markdown.length;
+
+      showToast('已插入到题面编辑器');
+    };
+
+    // Toast 提示
+    const showToast = (message) => {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.remove();
+      }, 2000);
+    };
+
+    // 从 URL 导入图片
+    const importFromUrl = async () => {
+      if (!editingId) {
+        showToast('请先保存题目');
+        return;
+      }
+
+      const input = document.getElementById('image-url-input');
+      const url = input.value.trim();
+
+      if (!url) {
+        showToast('请输入图片 URL');
+        return;
+      }
+
+      // 简单验证 URL 格式
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        showToast('URL 必须以 http:// 或 https:// 开头');
+        return;
+      }
+
+      try {
+        const btn = document.querySelector('.url-import-section .btn');
+        btn.disabled = true;
+        btn.textContent = '导入中...';
+
+        const res = await fetch(`/api/problems/${editingId}/assets/url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const result = await res.json();
+        if (result.error) {
+          showToast(result.error);
+        } else {
+          input.value = '';
+          loadAssets(editingId);
+          showToast(result.message);
+        }
+      } catch (e) {
+        showToast('导入失败: ' + e.message);
+      } finally {
+        const btn = document.querySelector('.url-import-section .btn');
+        btn.disabled = false;
+        btn.textContent = '从 URL 导入';
+      }
+    };
+
+    // ==================== 图片资源管理 ====================
+    const assetsUploadArea = document.getElementById('assets-upload-area');
+    assetsUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); assetsUploadArea.classList.add('dragover'); });
+    assetsUploadArea.addEventListener('dragleave', () => assetsUploadArea.classList.remove('dragover'));
+    assetsUploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      assetsUploadArea.classList.remove('dragover');
+      const input = document.getElementById('assets-file-input');
+      input.files = e.dataTransfer.files;
+      uploadAssets();
+    });
+
+    const loadAssets = async (problemId) => {
+      try {
+        const files = await api('GET', '/problems/' + problemId + '/assets');
+        const list = document.getElementById('assets-list');
+        if (files.length === 0) {
+          list.innerHTML = '<div style="color:#6c757d;font-size:13px;">暂无图片资源</div>';
+          return;
+        }
+        list.innerHTML = files.map(f => `
+          <div class="asset-item">
+            <img src="${esc(f.url)}" alt="${esc(f.name)}" title="${esc(f.name)}"
+                 onclick="previewImage('${esc(f.url)}', '${esc(f.name)}')" style="cursor:pointer;">
+            <div class="asset-name">${esc(f.name)}</div>
+            <div class="asset-actions">
+              <button onclick="copyImageUrl('${esc(f.url)}')" title="复制 URL">📋</button>
+              <button onclick="insertImageToMarkdown('${esc(f.url)}', '${esc(f.name)}')" title="插入到题面">📝</button>
+              <button onclick="deleteAsset('${esc(problemId)}','${esc(f.name)}')" title="删除">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('assets-list').innerHTML = `<div class="error-msg">加载失败</div>`;
+      }
+    };
+
+    const uploadAssets = async () => {
+      if (!editingId) return;
+      const input = document.getElementById('assets-file-input');
+      if (!input.files.length) return;
+
+      const formData = new FormData();
+      for (const file of input.files) {
+        formData.append('images', file);
+      }
+
+      // 显示进度条
+      const progress = document.getElementById('upload-progress');
+      const progressFill = progress.querySelector('.progress-fill');
+      const progressText = progress.querySelector('.progress-text');
+      progress.classList.remove('hidden');
+      progressFill.style.width = '0%';
+      progressText.textContent = '上传中... 0%';
+
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/problems/${editingId}/assets`);
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            progressFill.style.width = percent + '%';
+            progressText.textContent = `上传中... ${percent}%`;
+          }
+        });
+
+        xhr.onload = () => {
+          progress.classList.add('hidden');
+          try {
+            const result = JSON.parse(xhr.responseText);
+            if (result.error) {
+              alert(result.error);
+            } else {
+              loadAssets(editingId);
+              showToast(result.message);
+            }
+          } catch (e) {
+            alert('解析响应失败');
+          }
+        };
+
+        xhr.onerror = () => {
+          progress.classList.add('hidden');
+          alert('上传失败');
+        };
+
+        xhr.send(formData);
+      } catch (e) {
+        progress.classList.add('hidden');
+        alert('上传失败: ' + e.message);
+      }
+      input.value = '';
+    };
+
+    const deleteAsset = async (problemId, filename) => {
+      if (!confirm(`确认删除图片 "${filename}"？`)) return;
+      try {
+        await api('DELETE', `/problems/${problemId}/assets/${filename}`);
+        loadAssets(problemId);
+      } catch (e) {
+        alert('删除失败');
+      }
+    };
+
+    // ==================== 判题 ====================
+    const updateJudgeSelect = () => {
+      const select = document.getElementById('judge-problem');
+      const current = select.value;
+      select.innerHTML = '<option value="">-- 请选择 --</option>' +
+        allProblems.map(p => `<option value="${esc(p.id)}" ${p.id === current ? 'selected' : ''}>${esc(p.name)} [${esc(p.id)}]</option>`).join('');
+    };
+
+    const onJudgeProblemChange = async () => {
+      const id = document.getElementById('judge-problem').value;
+      const descDiv = document.getElementById('judge-problem-desc');
+      if (!id) {
+        descDiv.classList.add('hidden');
+        return;
+      }
+      try {
+        const p = await api('GET', '/problems/' + id);
+        if (p.content) {
+          descDiv.innerHTML = renderMarkdown(p.content);
+        } else if (p.description) {
+          descDiv.innerHTML = `<p>${esc(p.description)}</p>`;
+        } else {
+          descDiv.innerHTML = '<p style="color:#6c757d;">该题目暂无描述</p>';
+        }
+        descDiv.className = 'problem-content';
+      } catch (e) {
+        descDiv.innerHTML = `<p class="error-msg">加载题面失败</p>`;
+        descDiv.className = '';
+      }
+    };
+
+    const updateFilename = () => {
+      const input = document.getElementById('file-input');
+      const display = document.getElementById('filename-display');
+      if (input.files.length > 0) {
+        display.textContent = input.files[0].name;
+        document.getElementById('submit-btn').disabled = false;
+      } else {
+        display.textContent = '';
+        document.getElementById('submit-btn').disabled = true;
+      }
+    };
+
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      document.getElementById('upload-area').classList.add('dragover');
+    };
+    const handleDragLeave = () => document.getElementById('upload-area').classList.remove('dragover');
+    const handleDrop = (e) => {
+      e.preventDefault();
+      document.getElementById('upload-area').classList.remove('dragover');
+      const input = document.getElementById('file-input');
+      input.files = e.dataTransfer.files;
+      updateFilename();
+    };
+
+    const submitJudge = async () => {
+      const problemId = document.getElementById('judge-problem').value;
+      const fileInput = document.getElementById('file-input');
+
+      if (!problemId) { alert('请选择题目'); return; }
+      if (!fileInput.files.length) { alert('请选择 sb3 文件'); return; }
+
+      const btn = document.getElementById('submit-btn');
+      const resultDiv = document.getElementById('judge-result');
+      btn.disabled = true;
+      btn.textContent = '判题中...';
+      resultDiv.innerHTML = '<div class="loading">正在判题，请稍候...</div>';
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('problemId', problemId);
+
+      try {
+        const res = await fetch('/api/judge', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (data.error) {
+          resultDiv.innerHTML = `<div class="verdict verdict-RE">错误: ${esc(data.error)}</div>`;
+          return;
+        }
+
+        let html = `<div class="verdict verdict-${data.verdict}">${esc(data.verdict)}</div>`;
+        html += `<div style="font-size:13px;color:#6c757d;margin-bottom:12px;">总耗时: ${data.totalTime}ms | 总步数: ${data.totalSteps}</div>`;
+
+        if (data.results && data.results.length > 0) {
+          html += '<div class="result-section"><h3>各用例结果</h3>';
+          data.results.forEach((r, i) => {
+            const cls = r.verdict === 'AC' ? 'pass' : 'fail';
+            html += `<div class="case-result ${cls}">`;
+            html += `<strong>用例 ${i + 1}: <span class="verdict-${r.verdict}">${esc(r.verdict)}</span></strong>`;
+
+            if (r.input) {
+              html += `<div>输入: <code>${esc(JSON.stringify(r.input))}</code></div>`;
+            }
+            if (r.expected) {
+              html += `<div>期望: <code>${esc(JSON.stringify(r.expected))}</code></div>`;
+            }
+            if (r.actual) {
+              html += `<div>实际: <code>${esc(JSON.stringify(r.actual))}</code></div>`;
+            }
+            if (r.error) {
+              html += `<div class="error-msg">错误: ${esc(r.error)}</div>`;
+            }
+            html += `</div>`;
+          });
+          html += '</div>';
+        }
+
+        resultDiv.innerHTML = html;
+      } catch (e) {
+        resultDiv.innerHTML = `<div class="verdict verdict-RE">请求失败: ${esc(e.message)}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '提交判题';
+      }
+    };
+
+    // ==================== 初始化 ====================
+    loadProblems();
+  </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "scratch-oj-server",
+  "version": "1.0.0",
+  "description": "Scratch OJ 主服务 - 题目管理与判题调度",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/api.test.js"
+  },
+  "keywords": ["scratch", "oj", "judge"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "express": "^5.2.1",
+    "multer": "^2.1.1"
+  }
+}
