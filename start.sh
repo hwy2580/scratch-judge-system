@@ -5,20 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "🚀 启动 Scratch 判题系统..."
 
-# 启动评测机（后台运行）
+# 启动评测机（后台运行，不阻塞终端）
 echo "  启动评测机 (端口 3001)..."
 cd "$SCRIPT_DIR/scratch-judge-server"
-npm start &
+node server.js &
 JUDGE_PID=$!
 echo "  评测机 PID: $JUDGE_PID"
 
 # 等待评测机启动
-sleep 2
+sleep 3
 
-# 启动主服务（后台运行）
+# 启动主服务（后台运行，不阻塞终端）
 echo "  启动主服务 (端口 3000)..."
 cd "$SCRIPT_DIR/scratch-oj-server"
-npm start &
+node server.js &
 OJ_PID=$!
 echo "  主服务 PID: $OJ_PID"
 
