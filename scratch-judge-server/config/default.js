@@ -9,5 +9,8 @@ module.exports = {
   defaultStepLimit: 500000,
 
   // 默认最大内存（MB）
-  defaultMemoryLimit: 256
+  defaultMemoryLimit: 256,
+
+  // 默认最大 SB3 文件大小（MB）
+  maxSb3Size: parseInt(process.env.MAX_SB3_SIZE_MB || '50', 10) * 1024 * 1024
 };

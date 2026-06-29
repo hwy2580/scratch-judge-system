@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const dns = require('dns');
 const net = require('net');
+const http = require('http');
+const https = require('https');
 const db = require('../db');
 const config = require('../../config/default');
 const { validateProblem } = require('../middleware/validate');
@@ -21,32 +23,33 @@ const router = express.Router();
 function isPrivateOrReservedIP(ip) {
   if (net.isIPv4(ip)) {
     const parts = ip.split('.').map(Number);
-    // 127.0.0.0/8 (回环)
-    if (parts[0] === 127) return true;
-    // 10.0.0.0/8 (A 类私有)
-    if (parts[0] === 10) return true;
-    // 172.16.0.0/12 (B 类私有)
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-    // 192.168.0.0/16 (C 类私有)
-    if (parts[0] === 192 && parts[1] === 168) return true;
-    // 169.254.0.0/16 (链路本地)
-    if (parts[0] === 169 && parts[1] === 254) return true;
-    // 0.0.0.0/8
-    if (parts[0] === 0) return true;
+    if (parts[0] === 0) return true; // 本网络
+    if (parts[0] === 10) return true; // 私有地址
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true; // CGNAT
+    if (parts[0] === 127) return true; // 回环
+    if (parts[0] === 169 && parts[1] === 254) return true; // 链路本地
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 私有地址
+    if (parts[0] === 192 && parts[1] === 168) return true; // 私有地址
+    if (parts[0] === 192 && parts[1] === 0 && parts[2] === 0) return true; // IETF 协议分配
+    if (parts[0] === 192 && parts[1] === 0 && parts[2] === 2) return true; // 文档示例
+    if (parts[0] === 192 && parts[1] === 88 && parts[2] === 99) return true; // 6to4 中继
+    if (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19)) return true; // 基准测试
+    if (parts[0] === 198 && parts[1] === 51 && parts[2] === 100) return true; // 文档示例
+    if (parts[0] === 203 && parts[1] === 0 && parts[2] === 113) return true; // 文档示例
+    if (parts[0] >= 224) return true; // 组播/保留地址
     return false;
   }
   if (net.isIPv6(ip)) {
-    // ::1 (回环)
-    if (ip === '::1') return true;
-    // fc00::/7 (唯一本地地址)
-    if (ip.startsWith('fc') || ip.startsWith('fd')) return true;
-    // fe80::/10 (链路本地)
-    if (ip.startsWith('fe80')) return true;
-    // ::ffff: 前缀的 IPv4 映射地址
-    if (ip.startsWith('::ffff:')) {
-      const mappedIP = ip.substring(7);
-      return isPrivateOrReservedIP(mappedIP);
+    const normalized = ip.toLowerCase();
+    if (normalized === '::' || normalized === '::1') return true;
+    if (normalized.startsWith('::ffff:')) {
+      return isPrivateOrReservedIP(normalized.substring(7));
     }
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // 唯一本地地址
+    if (normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+        normalized.startsWith('fea') || normalized.startsWith('feb')) return true; // 链路本地
+    if (normalized.startsWith('ff')) return true; // 组播
+    if (normalized.startsWith('2001:db8')) return true; // 文档示例
     return false;
   }
   return false;
@@ -57,22 +60,139 @@ function isPrivateOrReservedIP(ip) {
  * @param {string} hostname - 主机名
  * @returns {Promise<void>} 如果安全则 resolve，否则 reject
  */
-async function validateHostnameNotPrivate(hostname) {
+async function resolvePublicHostname(hostname) {
+  const normalizedHostname = hostname.replace(/^\[|\]$/g, '');
+
   // 先检查是否直接是 IP 地址
-  if (net.isIPv4(hostname) || net.isIPv6(hostname)) {
-    if (isPrivateOrReservedIP(hostname)) {
+  if (net.isIPv4(normalizedHostname) || net.isIPv6(normalizedHostname)) {
+    if (isPrivateOrReservedIP(normalizedHostname)) {
       throw new Error('不允许访问私有/保留地址');
     }
-    return;
+    return [{
+      address: normalizedHostname,
+      family: net.isIPv4(normalizedHostname) ? 4 : 6
+    }];
   }
 
   // DNS 解析主机名
-  const addresses = await dns.promises.lookup(hostname, { all: true, family: 0 });
+  const addresses = await dns.promises.lookup(normalizedHostname, { all: true, family: 0 });
   for (const addr of addresses) {
     if (isPrivateOrReservedIP(addr.address)) {
       throw new Error('不允许访问私有/保留地址');
     }
   }
+
+  return addresses;
+}
+
+const RESERVED_FILENAMES = new Set([
+  'CON', 'PRN', 'AUX', 'NUL',
+  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+]);
+
+const MIME_EXTENSIONS = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp'
+};
+
+function isAllowedImageMimeType(mimeType) {
+  return config.allowedImageTypes.includes(mimeType);
+}
+
+function sanitizeAssetFilename(originalName, mimeType, fallback = 'image') {
+  const rawName = path.basename(originalName || '');
+  const parsed = path.parse(rawName);
+  const safeExt = MIME_EXTENSIONS[mimeType] || '.bin';
+  let base = (parsed.name || fallback).replace(/[^a-zA-Z0-9._-]/g, '_');
+  base = base.replace(/^\.+/, '').substring(0, 80);
+
+  if (!base || RESERVED_FILENAMES.has(base.toUpperCase())) {
+    base = fallback;
+  }
+
+  return `${base}${safeExt}`;
+}
+
+function getUniqueFilename(dir, filename) {
+  const ext = path.extname(filename);
+  const base = path.basename(filename, ext);
+  let finalName = filename;
+  let counter = 1;
+
+  while (fs.existsSync(path.join(dir, finalName))) {
+    finalName = `${base}-${counter}${ext}`;
+    counter++;
+  }
+
+  return finalName;
+}
+
+async function downloadUrlWithoutRedirect(parsedUrl, maxBytes) {
+  const addresses = await resolvePublicHostname(parsedUrl.hostname);
+  const pinnedAddress = addresses[0];
+  const client = parsedUrl.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (!settled) {
+        settled = true;
+        fn(value);
+      }
+    };
+
+    const req = client.request({
+      protocol: parsedUrl.protocol,
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || undefined,
+      path: `${parsedUrl.pathname}${parsedUrl.search}`,
+      method: 'GET',
+      timeout: 10000,
+      servername: parsedUrl.hostname,
+      headers: {
+        Host: parsedUrl.host,
+        'User-Agent': 'scratch-oj-server/1.0'
+      },
+      lookup: (hostname, options, cb) => {
+        cb(null, pinnedAddress.address, pinnedAddress.family);
+      }
+    }, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400) {
+        response.resume();
+        finish(reject, Object.assign(new Error('不允许重定向，请提供最终图片地址'), { code: 'REDIRECT' }));
+        return;
+      }
+
+      const chunks = [];
+      let total = 0;
+
+      response.on('data', (chunk) => {
+        total += chunk.length;
+        if (total > maxBytes) {
+          req.destroy(Object.assign(new Error('文件大小超过限制'), { code: 'TOO_LARGE' }));
+          return;
+        }
+        chunks.push(chunk);
+      });
+
+      response.on('end', () => {
+        finish(resolve, {
+          statusCode: response.statusCode,
+          headers: response.headers,
+          buffer: Buffer.concat(chunks)
+        });
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy(Object.assign(new Error('下载超时（10 秒）'), { code: 'TIMEOUT' }));
+    });
+    req.on('error', (err) => finish(reject, err));
+    req.end();
+  });
 }
 
 // ==================== 图片上传配置 ====================
@@ -87,23 +207,14 @@ const upload = multer({
       cb(null, dir);
     },
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      const base = path.basename(file.originalname, ext);
       const dir = path.join(config.uploadDir, req.params.id);
-
-      // 处理文件名冲突：如果文件已存在，添加 -1, -2 等后缀
-      let finalName = `${base}${ext}`;
-      let counter = 1;
-      while (fs.existsSync(path.join(dir, finalName))) {
-        finalName = `${base}-${counter}${ext}`;
-        counter++;
-      }
-      cb(null, finalName);
+      const safeName = sanitizeAssetFilename(file.originalname, file.mimetype);
+      cb(null, getUniqueFilename(dir, safeName));
     }
   }),
   limits: { fileSize: config.maxImageSize },
   fileFilter: (req, file, cb) => {
-    if (config.allowedImageTypes.includes(file.mimetype)) {
+    if (isAllowedImageMimeType(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error(`不支持的文件类型: ${file.mimetype}`));
@@ -116,15 +227,8 @@ const upload = multer({
 const sql = {
   list: db.prepare(`
     SELECT id, name, description, category, difficulty, source, tags,
-           time_limit, step_limit, created_at, updated_at
+           time_limit, step_limit, test_cases, created_at, updated_at
     FROM problems ORDER BY created_at DESC
-  `),
-  listFiltered: db.prepare(`
-    SELECT id, name, description, category, difficulty, source, tags,
-           time_limit, step_limit, created_at, updated_at
-    FROM problems
-    WHERE category = ? AND difficulty = ? AND source = ?
-    ORDER BY created_at DESC
   `),
   get: db.prepare('SELECT * FROM problems WHERE id = ?'),
   insert: db.prepare(`
@@ -154,17 +258,30 @@ const sql = {
 router.get('/', (req, res) => {
   try {
     const { category, difficulty, source, tag } = req.query;
+    const filters = [];
+    const params = [];
 
-    let problems;
-    if (category || difficulty || source) {
-      problems = sql.listFiltered.all(
-        category || '',
-        difficulty || '',
-        source || ''
-      );
-    } else {
-      problems = sql.list.all();
+    if (category) {
+      filters.push('category = ?');
+      params.push(category);
     }
+    if (difficulty) {
+      filters.push('difficulty = ?');
+      params.push(difficulty);
+    }
+    if (source) {
+      filters.push('source = ?');
+      params.push(source);
+    }
+
+    const listQuery = `
+      SELECT id, name, description, category, difficulty, source, tags,
+             time_limit, step_limit, test_cases, created_at, updated_at
+      FROM problems
+      ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
+      ORDER BY created_at DESC
+    `;
+    let problems = filters.length ? db.prepare(listQuery).all(...params) : sql.list.all();
 
     // 标签筛选（SQLite JSON 函数较复杂，应用层过滤）
     if (tag) {
@@ -391,74 +508,45 @@ router.post('/:id/assets/url', async (req, res) => {
       return res.status(404).json({ error: `题目 ${problemId} 不存在` });
     }
 
-    // SSRF 防护：验证主机名不解析到私有/保留 IP
+    // 下载图片：固定使用已校验的 DNS 解析结果，禁止重定向，避免 DNS rebinding。
+    let download;
     try {
-      await validateHostnameNotPrivate(parsedUrl.hostname);
-    } catch (ssrfErr) {
-      return res.status(400).json({ error: ssrfErr.message });
-    }
-
-    // 下载图片（带超时，禁止自动跟随重定向）
-    let response;
-    try {
-      response = await fetch(url, {
-        signal: AbortSignal.timeout(10000),
-        redirect: 'error'
-      });
-    } catch (fetchErr) {
-      if (fetchErr.name === 'TimeoutError' || fetchErr.name === 'AbortError') {
-        return res.status(400).json({ error: '下载超时（10 秒）' });
+      download = await downloadUrlWithoutRedirect(parsedUrl, config.maxImageSize);
+    } catch (downloadErr) {
+      if (downloadErr.code === 'TIMEOUT') {
+        return res.status(400).json({ error: downloadErr.message });
       }
-      if (fetchErr.type === 'redirect') {
-        return res.status(400).json({ error: '不允许重定向，请提供最终图片地址' });
+      if (downloadErr.code === 'REDIRECT') {
+        return res.status(400).json({ error: downloadErr.message });
+      }
+      if (downloadErr.code === 'TOO_LARGE') {
+        return res.status(400).json({ error: `文件大小超过限制 (${config.maxImageSize / 1024 / 1024}MB)` });
+      }
+      if (downloadErr.message === '不允许访问私有/保留地址') {
+        return res.status(400).json({ error: downloadErr.message });
       }
       return res.status(400).json({ error: '下载失败' });
     }
-    if (!response.ok) {
-      return res.status(400).json({ error: `下载失败: HTTP ${response.status}` });
+    if (download.statusCode < 200 || download.statusCode >= 300) {
+      return res.status(400).json({ error: `下载失败: HTTP ${download.statusCode}` });
     }
 
     // 检查内容类型
-    const contentType = response.headers.get('content-type') || '';
+    const contentType = download.headers['content-type'] || '';
     const mimeType = contentType.split(';')[0].trim();
-    if (!mimeType.startsWith('image/')) {
-      return res.status(400).json({ error: 'URL 不是图片资源' });
+    if (!isAllowedImageMimeType(mimeType)) {
+      return res.status(400).json({ error: `不支持的图片类型: ${mimeType}` });
     }
 
     // 检查文件大小（Content-Length 头）
-    const contentLength = response.headers.get('content-length');
+    const contentLength = download.headers['content-length'];
     if (contentLength && parseInt(contentLength) > config.maxImageSize) {
       return res.status(400).json({ error: `文件大小超过限制 (${config.maxImageSize / 1024 / 1024}MB)` });
     }
 
     // 获取文件名并清洗（I4：移除不安全字符，限制长度，拒绝保留名）
     const urlPath = parsedUrl.pathname;
-    let filename = path.basename(urlPath);
-
-    // 清洗文件名：只保留字母数字和 .-_
-    filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    // 限制长度
-    if (filename.length > 100) {
-      const ext = path.extname(filename);
-      filename = filename.substring(0, 100 - ext.length) + ext;
-    }
-    // 拒绝空文件名或 Windows 保留名
-    const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
-    const baseName = path.basename(filename, path.extname(filename)).toUpperCase();
-    if (!filename || reservedNames.includes(baseName)) {
-      filename = 'imported-image';
-    }
-
-    // 如果没有扩展名，根据 content-type 添加
-    if (!path.extname(filename)) {
-      const extMap = {
-        'image/png': '.png',
-        'image/jpeg': '.jpg',
-        'image/gif': '.gif',
-        'image/svg+xml': '.svg'
-      };
-      filename = 'imported-image' + (extMap[mimeType] || '.png');
-    }
+    const filename = sanitizeAssetFilename(path.basename(urlPath), mimeType, 'imported-image');
 
     // 确保目录存在
     const dir = path.join(config.uploadDir, problemId);
@@ -467,25 +555,18 @@ router.post('/:id/assets/url', async (req, res) => {
     }
 
     // 处理文件名冲突
-    let finalFilename = filename;
-    let counter = 1;
-    while (fs.existsSync(path.join(dir, finalFilename))) {
-      const ext = path.extname(filename);
-      const base = path.basename(filename, ext);
-      finalFilename = `${base}_${counter}${ext}`;
-      counter++;
-    }
+    const finalFilename = getUniqueFilename(dir, filename);
 
     // 保存文件
     const filePath = path.join(dir, finalFilename);
-    const buffer = await response.arrayBuffer();
+    const buffer = download.buffer;
 
     // C2：验证实际下载的 buffer 大小
-    if (buffer.byteLength > config.maxImageSize) {
+    if (buffer.length > config.maxImageSize) {
       return res.status(400).json({ error: `文件大小超过限制 (${config.maxImageSize / 1024 / 1024}MB)` });
     }
 
-    fs.writeFileSync(filePath, Buffer.from(buffer));
+    fs.writeFileSync(filePath, buffer);
 
     // 记录到数据库
     const stats = fs.statSync(filePath);

@@ -14,7 +14,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // 图片资源静态服务
-app.use('/api/assets', express.static(path.resolve(config.uploadDir)));
+app.use('/api/assets', express.static(path.resolve(config.uploadDir), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (path.extname(filePath).toLowerCase() === '.svg') {
+      res.setHeader('Content-Disposition', 'attachment');
+    }
+  }
+}));
 
 // API 路由
 app.use('/api/problems', problemsRoutes);
@@ -35,18 +42,23 @@ app.get('/api/health', async (req, res) => {
 });
 
 // 启动服务器
-const args = process.argv.slice(2);
-const portArg = args.indexOf('--port');
-const port = portArg !== -1 && args[portArg + 1]
-  ? parseInt(args[portArg + 1], 10)
-  : config.port;
+function resolvePort() {
+  const args = process.argv.slice(2);
+  const portArg = args.indexOf('--port');
+  return portArg !== -1 && args[portArg + 1]
+    ? parseInt(args[portArg + 1], 10)
+    : config.port;
+}
 
-app.listen(port, () => {
-  console.log(`Scratch OJ 主服务已启动，端口: ${port}`);
-  console.log(`题目管理: http://localhost:${port}/api/problems`);
-  console.log(`判题接口: http://localhost:${port}/api/judge`);
-  console.log(`健康检查: http://localhost:${port}/api/health`);
-  console.log(`评测机地址: ${config.judgeUrl}`);
-});
+if (require.main === module) {
+  const port = resolvePort();
+  app.listen(port, () => {
+    console.log(`Scratch OJ 主服务已启动，端口: ${port}`);
+    console.log(`题目管理: http://localhost:${port}/api/problems`);
+    console.log(`判题接口: http://localhost:${port}/api/judge`);
+    console.log(`健康检查: http://localhost:${port}/api/health`);
+    console.log(`评测机地址: ${config.judgeUrl}`);
+  });
+}
 
 module.exports = app;

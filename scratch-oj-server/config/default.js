@@ -9,8 +9,9 @@ module.exports = {
   dbPath: process.env.DB_PATH || './data/judge.db',
 
   // 图片上传
-  uploadDir: './uploads',
+  uploadDir: process.env.UPLOAD_DIR || './uploads',
   maxImageSize: 5 * 1024 * 1024, // 5MB
   maxImagesPerUpload: 10,
-  allowedImageTypes: ['image/png', 'image/jpeg', 'image/svg+xml', 'image/gif']
+  maxSb3Size: parseInt(process.env.MAX_SB3_SIZE_MB || '50', 10) * 1024 * 1024,
+  allowedImageTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 };

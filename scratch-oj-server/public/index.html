@@ -362,8 +362,8 @@
           <div class="form-group" id="assets-section">
             <label>图片资源</label>
             <div class="upload-area" id="assets-upload-area" onclick="document.getElementById('assets-file-input').click()">
-              <p>点击或拖拽上传图片（PNG、JPG、SVG、GIF，最大 5MB）</p>
-              <input type="file" id="assets-file-input" class="hidden" multiple accept="image/png,image/jpeg,image/svg+xml,image/gif" onchange="uploadAssets()">
+              <p>点击或拖拽上传图片（PNG、JPG、GIF、WebP，最大 5MB）</p>
+              <input type="file" id="assets-file-input" class="hidden" multiple accept="image/png,image/jpeg,image/gif,image/webp" onchange="uploadAssets()">
             </div>
             <div class="assets-list" id="assets-list"></div>
             <!-- 上传进度条 -->
@@ -439,13 +439,37 @@
 
   <script>
     // ==================== 工具函数 ====================
+    const isFileProtocol = window.location.protocol === 'file:';
+
+    const showFileProtocolNotice = () => {
+      const tbody = document.getElementById('problems-tbody');
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="error-msg" style="padding:16px;line-height:1.8;">
+              当前页面是通过 file:// 打开的，不能直接访问后端 API。<br>
+              请先在 scratch-oj-server 目录运行 <code>npm start</code>，然后访问
+              <code>http://localhost:3000</code>。
+            </td>
+          </tr>
+        `;
+      }
+    };
+
+    const apiUrl = (path) => {
+      if (isFileProtocol) {
+        throw new Error('请通过 http://localhost:3000 打开页面，不要直接打开 index.html 文件');
+      }
+      return '/api' + path;
+    };
+
     const api = async (method, path, body) => {
       const opts = { method, headers: {} };
       if (body) {
         opts.headers['Content-Type'] = 'application/json';
         opts.body = JSON.stringify(body);
       }
-      const res = await fetch('/api' + path, opts);
+      const res = await fetch(apiUrl(path), opts);
       return res.json();
     };
 
@@ -639,7 +663,7 @@
         // 确保上传区域可用
         const uploadArea = document.getElementById('assets-upload-area');
         uploadArea.classList.remove('disabled');
-        uploadArea.querySelector('p').textContent = '点击或拖拽上传图片（PNG、JPG、SVG、GIF，最大 5MB）';
+        uploadArea.querySelector('p').textContent = '点击或拖拽上传图片（PNG、JPG、GIF、WebP，最大 5MB）';
 
         // 显示 URL 导入区域
         const urlSection = document.querySelector('.url-import-section');
@@ -737,7 +761,7 @@
             // 启用图片上传区域
             const uploadArea = document.getElementById('assets-upload-area');
             uploadArea.classList.remove('disabled');
-            uploadArea.querySelector('p').textContent = '点击或拖拽上传图片（PNG、JPG、SVG、GIF，最大 5MB）';
+            uploadArea.querySelector('p').textContent = '点击或拖拽上传图片（PNG、JPG、GIF、WebP，最大 5MB）';
 
             // 显示 URL 导入区域
             const urlSection = document.querySelector('.url-import-section');
@@ -859,7 +883,7 @@
         btn.disabled = true;
         btn.textContent = '导入中...';
 
-        const res = await fetch(`/api/problems/${editingId}/assets/url`, {
+        const res = await fetch(apiUrl(`/problems/${editingId}/assets/url`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url })
@@ -939,7 +963,7 @@
 
       try {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `/api/problems/${editingId}/assets`);
+        xhr.open('POST', apiUrl(`/problems/${editingId}/assets`));
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -1061,7 +1085,7 @@
       formData.append('problemId', problemId);
 
       try {
-        const res = await fetch('/api/judge', { method: 'POST', body: formData });
+        const res = await fetch(apiUrl('/judge'), { method: 'POST', body: formData });
         const data = await res.json();
 
         if (data.error) {
@@ -1106,7 +1130,11 @@
     };
 
     // ==================== 初始化 ====================
-    loadProblems();
+    if (isFileProtocol) {
+      showFileProtocolNotice();
+    } else {
+      loadProblems();
+    }
   </script>
 </body>
 </html>

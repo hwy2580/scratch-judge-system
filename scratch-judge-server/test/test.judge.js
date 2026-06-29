@@ -12,7 +12,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const SERVER_URL = 'http://localhost:3001';
+let SERVER_URL = process.env.TEST_URL;
+let testServer;
 
 /**
  * 发送 HTTP 请求
@@ -204,12 +205,22 @@ async function testJudgeSuccess(sb3Path) {
 async function main() {
   console.log('=== Scratch 评测机集成测试 ===');
 
-  // 检查服务器是否运行
-  try {
-    await request('GET', `${SERVER_URL}/api/health`);
-  } catch (err) {
-    console.error('\n错误: 服务器未运行，请先启动服务器: node server.js');
-    process.exit(1);
+  if (!SERVER_URL) {
+    const app = require('../server');
+    await new Promise((resolve) => {
+      testServer = app.listen(0, '127.0.0.1', () => {
+        SERVER_URL = `http://127.0.0.1:${testServer.address().port}`;
+        resolve();
+      });
+    });
+  } else {
+    // 检查外部服务器是否运行
+    try {
+      await request('GET', `${SERVER_URL}/api/health`);
+    } catch (err) {
+      console.error('\n错误: 服务器未运行，请先启动服务器: node server.js');
+      process.exit(1);
+    }
   }
 
   const results = [];
@@ -226,6 +237,10 @@ async function main() {
 
   if (passed < results.length) {
     process.exit(1);
+  }
+
+  if (testServer) {
+    await new Promise((resolve) => testServer.close(resolve));
   }
 }
 

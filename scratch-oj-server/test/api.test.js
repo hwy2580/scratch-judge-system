@@ -9,7 +9,8 @@ const path = require('path');
 const fs = require('fs');
 
 // 测试配置
-const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
+let BASE_URL = process.env.TEST_URL;
+let testServer;
 const TEST_DB_PATH = path.join(__dirname, '..', 'data', 'test.db');
 const TEST_UPLOAD_DIR = path.join(__dirname, '..', 'uploads-test');
 
@@ -51,6 +52,7 @@ const cleanup = async () => {
     await api('DELETE', '/api/problems/test-e2e');
     await api('DELETE', '/api/problems/test-e2e-2');
     await api('DELETE', '/api/problems/test-url-import');
+    await api('DELETE', '/api/problems/test-filter');
   } catch (e) {
     // 忽略清理错误
   }
@@ -58,6 +60,16 @@ const cleanup = async () => {
 
 describe('图片导入功能增强 - 端到端测试', () => {
   before(async () => {
+    if (!BASE_URL) {
+      const app = require('../server');
+      await new Promise((resolve) => {
+        testServer = app.listen(0, '127.0.0.1', () => {
+          BASE_URL = `http://127.0.0.1:${testServer.address().port}`;
+          resolve();
+        });
+      });
+    }
+
     // 确保测试上传目录存在
     if (!fs.existsSync(TEST_UPLOAD_DIR)) {
       fs.mkdirSync(TEST_UPLOAD_DIR, { recursive: true });
@@ -72,6 +84,9 @@ describe('图片导入功能增强 - 端到端测试', () => {
     // 清理测试上传目录
     if (fs.existsSync(TEST_UPLOAD_DIR)) {
       fs.rmSync(TEST_UPLOAD_DIR, { recursive: true, force: true });
+    }
+    if (testServer) {
+      await new Promise((resolve) => testServer.close(resolve));
     }
   });
 
@@ -141,6 +156,30 @@ describe('图片导入功能增强 - 端到端测试', () => {
       assert.ok(Array.isArray(data));
       assert.ok(data.some(p => p.id === 'test-e2e'));
     });
+
+    test('GET /api/problems 应支持单条件和多条件筛选', async () => {
+      await api('POST', '/api/problems', {
+        id: 'test-filter',
+        name: '筛选测试题',
+        category: 'math',
+        difficulty: 'easy',
+        source: 'local',
+        tags: ['filter'],
+        testCases: [{ input: {}, output: {} }]
+      });
+
+      const byCategory = await api('GET', '/api/problems?category=math');
+      assert.strictEqual(byCategory.status, 200);
+      assert.ok(byCategory.data.some(p => p.id === 'test-filter'));
+
+      const byAll = await api('GET', '/api/problems?category=math&difficulty=easy&source=local');
+      assert.strictEqual(byAll.status, 200);
+      assert.ok(byAll.data.some(p => p.id === 'test-filter'));
+
+      const mismatch = await api('GET', '/api/problems?category=math&difficulty=hard');
+      assert.strictEqual(mismatch.status, 200);
+      assert.ok(!mismatch.data.some(p => p.id === 'test-filter'));
+    });
   });
 
   // ==================== 图片上传 ====================
@@ -160,6 +199,38 @@ describe('图片导入功能增强 - 端到端测试', () => {
       assert.ok(data.message.includes('成功上传'));
       assert.ok(Array.isArray(data.files));
       assert.ok(data.files.length > 0);
+    });
+
+    test('POST /api/problems/:id/assets 应清洗不安全文件名', async () => {
+      const formData = new FormData();
+      const blob = new Blob([TEST_PNG], { type: 'image/png' });
+      formData.append('images', blob, '../CON?.png');
+
+      const res = await fetch(`${BASE_URL}/api/problems/test-e2e/assets`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      assert.strictEqual(res.status, 200);
+      const uploaded = data.files[0].split('/').pop();
+      assert.ok(!uploaded.includes('..'));
+      assert.ok(!uploaded.includes('?'));
+      assert.notStrictEqual(path.parse(uploaded).name.toUpperCase(), 'CON');
+    });
+
+    test('POST /api/problems/:id/assets 应拒绝 SVG 上传', async () => {
+      const formData = new FormData();
+      formData.append('images', new Blob(['<svg></svg>'], { type: 'image/svg+xml' }), 'x.svg');
+
+      const res = await fetch(`${BASE_URL}/api/problems/test-e2e/assets`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      assert.strictEqual(res.status, 400);
+      assert.ok(data.error.includes('不支持的文件类型'));
     });
 
     test('GET /api/problems/:id/assets 应返回图片列表', async () => {
